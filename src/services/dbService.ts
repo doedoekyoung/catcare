@@ -276,6 +276,7 @@ export async function addRecipe(
     .from(TABLES.RECIPES)
     .insert({
       name: data.name,
+      time: data.times[0] ?? 'morning',
       times: data.times,
       cat_ids: data.catIds,
       active: data.active,
