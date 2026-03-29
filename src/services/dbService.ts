@@ -191,7 +191,6 @@ export async function addCat(
       birth_year: catData.birthYear ?? null,
       birth_month: catData.birthMonth ?? null,
       birth_day: catData.birthDay ?? null,
-      met_date: catData.metDate ?? null,
       notes: catData.notes ?? null,
       breed: catData.breed ?? null,
       weight: catData.weight ?? null,
