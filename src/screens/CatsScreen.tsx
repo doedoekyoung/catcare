@@ -49,7 +49,7 @@ export default function CatsScreen() {
   const [catBirthYear, setCatBirthYear] = useState('');
   const [catBirthMonth, setCatBirthMonth] = useState<number | null>(null);
   const [catBirthDay, setCatBirthDay] = useState<number | null>(null);
-  const [catMetDate, setCatMetDate] = useState('');
+  const [activePicker, setActivePicker] = useState<'year' | 'month' | 'day' | null>(null);
   const [catNotes, setCatNotes] = useState('');
 
   // ── Recipe modal state ────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ export default function CatsScreen() {
     setCatName(''); setCatPhotoUri(''); setCatGender('');
     setCatTagColor(CAT_TAG_COLORS[0]);
     setCatBirthYear(''); setCatBirthMonth(null); setCatBirthDay(null);
-    setCatMetDate(''); setCatNotes('');
+    setActivePicker(null); setCatNotes('');
     setCatModal(true);
   };
 
@@ -91,7 +91,7 @@ export default function CatsScreen() {
     setCatBirthYear(cat.birthYear ? String(cat.birthYear) : '');
     setCatBirthMonth(cat.birthMonth ?? null);
     setCatBirthDay(cat.birthDay ?? null);
-    setCatMetDate(cat.metDate ?? '');
+    setActivePicker(null);
     setCatNotes(cat.notes ?? '');
     setCatModal(true);
   };
@@ -106,7 +106,6 @@ export default function CatsScreen() {
       birthYear: catBirthYear ? Number(catBirthYear) : undefined,
       birthMonth: catBirthMonth ?? undefined,
       birthDay: catBirthDay ?? undefined,
-      metDate: catMetDate || undefined,
       notes: catNotes || undefined,
     };
 
@@ -381,22 +380,59 @@ export default function CatsScreen() {
 
           {/* 생년월일/만난 날 */}
           <Text style={styles.fieldLabel}>생년월일/만난 날</Text>
-          <Input
-            placeholder="출생년도 (예: 2021)"
-            value={catBirthYear}
-            onChangeText={(v) => { setCatBirthYear(v); if (!v) { setCatBirthMonth(null); setCatBirthDay(null); } }}
-            keyboardType="number-pad"
-            maxLength={4}
-            containerStyle={{ marginBottom: spacing.sm }}
-          />
-          {!!catBirthYear && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+          <View style={[styles.optionRow, { marginBottom: activePicker ? 8 : spacing.md }]}>
+            {/* 년 버튼 */}
+            <TouchableOpacity
+              style={[styles.dateBtn, catBirthYear ? { borderColor: catTagColor } : null, activePicker === 'year' && { backgroundColor: catTagColor, borderColor: catTagColor }]}
+              onPress={() => setActivePicker(activePicker === 'year' ? null : 'year')}
+            >
+              <Text style={[styles.dateBtnText, activePicker === 'year' && { color: '#fff' }, (catBirthYear && activePicker !== 'year') && { color: catTagColor }]}>
+                {catBirthYear ? `${catBirthYear}년` : '년'}
+              </Text>
+            </TouchableOpacity>
+            {/* 월 버튼 */}
+            <TouchableOpacity
+              style={[styles.dateBtn, !catBirthYear && styles.dateBtnDisabled, catBirthMonth ? { borderColor: catTagColor } : null, activePicker === 'month' && { backgroundColor: catTagColor, borderColor: catTagColor }]}
+              onPress={() => { if (catBirthYear) setActivePicker(activePicker === 'month' ? null : 'month'); }}
+              disabled={!catBirthYear}
+            >
+              <Text style={[styles.dateBtnText, !catBirthYear && { color: colors.muted }, activePicker === 'month' && { color: '#fff' }, (catBirthMonth && activePicker !== 'month') && { color: catTagColor }]}>
+                {catBirthMonth ? `${catBirthMonth}월` : '월'}
+              </Text>
+            </TouchableOpacity>
+            {/* 일 버튼 */}
+            <TouchableOpacity
+              style={[styles.dateBtn, !catBirthMonth && styles.dateBtnDisabled, catBirthDay ? { borderColor: catTagColor } : null, activePicker === 'day' && { backgroundColor: catTagColor, borderColor: catTagColor }]}
+              onPress={() => { if (catBirthMonth) setActivePicker(activePicker === 'day' ? null : 'day'); }}
+              disabled={!catBirthMonth}
+            >
+              <Text style={[styles.dateBtnText, !catBirthMonth && { color: colors.muted }, activePicker === 'day' && { color: '#fff' }, (catBirthDay && activePicker !== 'day') && { color: catTagColor }]}>
+                {catBirthDay ? `${catBirthDay}일` : '일'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 년도 입력 */}
+          {activePicker === 'year' && (
+            <Input
+              placeholder="출생년도 (예: 2021)"
+              value={catBirthYear}
+              onChangeText={(v) => { setCatBirthYear(v); if (!v) { setCatBirthMonth(null); setCatBirthDay(null); } }}
+              keyboardType="number-pad"
+              maxLength={4}
+              containerStyle={{ marginBottom: spacing.sm }}
+              autoFocus
+            />
+          )}
+          {/* 월 선택 */}
+          {activePicker === 'month' && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
               <View style={styles.monthRow}>
                 {MONTHS.map((m) => (
                   <TouchableOpacity
                     key={m}
                     style={[styles.dateChip, catBirthMonth === m && { backgroundColor: catTagColor, borderColor: catTagColor }]}
-                    onPress={() => { setCatBirthMonth(catBirthMonth === m ? null : m); setCatBirthDay(null); }}
+                    onPress={() => { setCatBirthMonth(catBirthMonth === m ? null : m); if (catBirthMonth === m) setCatBirthDay(null); }}
                   >
                     <Text style={[styles.dateChipText, catBirthMonth === m && { color: '#fff' }]}>{m}월</Text>
                   </TouchableOpacity>
@@ -404,8 +440,9 @@ export default function CatsScreen() {
               </View>
             </ScrollView>
           )}
-          {!!catBirthMonth && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
+          {/* 일 선택 */}
+          {activePicker === 'day' && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
               <View style={styles.monthRow}>
                 {DAYS.map((d) => (
                   <TouchableOpacity
@@ -419,15 +456,6 @@ export default function CatsScreen() {
               </View>
             </ScrollView>
           )}
-
-          {/* 만난 날 */}
-          <Input
-            label="만난 날 (선택)"
-            value={catMetDate}
-            onChangeText={setCatMetDate}
-            placeholder="예: 2023-03-15"
-            maxLength={10}
-          />
 
           {/* 특이사항 */}
           <Input
@@ -586,6 +614,13 @@ const styles = StyleSheet.create({
   yearInput: { width: 90, marginBottom: 0 },
   monthScroll: { flex: 1 },
   monthRow: { flexDirection: 'row', gap: 6 },
+  dateBtn: {
+    flex: 1, paddingVertical: 10, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cream,
+    alignItems: 'center',
+  },
+  dateBtnDisabled: { opacity: 0.4 },
+  dateBtnText: { fontSize: 14, color: colors.brownMid, fontWeight: '500' },
   dateChip: {
     paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.full,
     borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cream,
