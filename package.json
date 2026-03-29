@@ -31,7 +31,6 @@
     "@react-native-async-storage/async-storage": "1.23.1",
     "react-native-uuid": "^2.0.2",
     "date-fns": "^3.6.0",
-    "victory-native": "^41.0.0",
     "react-native-swipeable-item": "^2.0.0"
   },
   "devDependencies": {
