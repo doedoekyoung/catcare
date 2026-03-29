@@ -1,29 +1,19 @@
 // src/services/authService.ts
-
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  updateProfile,
-  User as FirebaseUser,
-} from 'firebase/auth';
-import { auth } from './firebase';
-import { upsertUser, getUserById } from './firestoreService';
+import { supabase } from './supabase';
+import { upsertUser, getUserById } from './dbService';
 import type { User } from '../types';
-
-// ── Email/Password Auth ───────────────────────────────────────────────────────
 
 export async function signUpWithEmail(
   email: string,
   password: string,
   displayName: string
 ): Promise<User> {
-  const cred = await createUserWithEmailAndPassword(auth, email, password);
-  await updateProfile(cred.user, { displayName });
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) throw error;
+  if (!data.user) throw new Error('회원가입에 실패했습니다.');
 
   const user: User = {
-    uid: cred.user.uid,
+    uid: data.user.id,
     email,
     displayName,
     role: 'owner',
@@ -36,33 +26,34 @@ export async function signInWithEmail(
   email: string,
   password: string
 ): Promise<User> {
-  const cred = await signInWithEmailAndPassword(auth, email, password);
-  const user = await getUserById(cred.user.uid);
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  if (!data.user) throw new Error('로그인에 실패했습니다.');
+
+  const user = await getUserById(data.user.id);
   if (!user) throw new Error('사용자 정보를 찾을 수 없습니다.');
   return user;
 }
 
 export async function signOut(): Promise<void> {
-  await firebaseSignOut(auth);
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
 }
-
-// ── Auth State Observer ───────────────────────────────────────────────────────
 
 export function subscribeToAuthState(
   cb: (user: User | null) => void
 ): () => void {
-  return onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
-    if (!fbUser) { cb(null); return; }
-    const user = await getUserById(fbUser.uid);
-    cb(user);
-  });
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    async (_event, session) => {
+      if (!session?.user) { cb(null); return; }
+      const user = await getUserById(session.user.id);
+      cb(user);
+    }
+  );
+  return () => subscription.unsubscribe();
 }
 
-// ── Guest / Sitter Access (REQ-V1-04) ────────────────────────────────────────
-// Sitters access via share link — they get a read+check anonymous session.
-
 export async function signInAsGuest(): Promise<void> {
-  // Firebase anonymous auth — gives sitters a uid for check attribution
-  const { signInAnonymously } = await import('firebase/auth');
-  await signInAnonymously(auth);
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) throw error;
 }

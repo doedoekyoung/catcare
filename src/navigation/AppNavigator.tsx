@@ -16,14 +16,11 @@ import { subscribeToAuthState } from '../services/authService';
 import {
   subscribeToCats, subscribeToRecipes,
   subscribeToChecks, subscribeToLogs,
-  getUserById,
-} from '../services/firestoreService';
-import { getDoc, doc } from 'firebase/firestore';
-import { db, COLLECTIONS } from '../services/firebase';
+  getHouseholdById,
+} from '../services/dbService';
 import { useStore } from '../store/useStore';
 import { colors, spacing, radius } from '../utils/theme';
 import { toDateKey } from '../utils/date';
-import type { Household } from '../types';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -88,9 +85,8 @@ export default function AppNavigator() {
       if (u?.householdId) {
         setIsLoading(true);
         try {
-          // Load household
-          const hhSnap = await getDoc(doc(db, COLLECTIONS.HOUSEHOLDS, u.householdId));
-          if (hhSnap.exists()) setHousehold(hhSnap.data() as Household);
+          const hh = await getHouseholdById(u.householdId);
+          if (hh) setHousehold(hh);
 
           const today = toDateKey();
           // Subscribe to real-time collections
