@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signUpWithEmail, signInWithEmail } from '../services/authService';
-import { createHousehold } from '../services/firestoreService';
+import { createHousehold } from '../services/dbService';
 import { useStore } from '../store/useStore';
 import { Button, Input } from '../components/ui';
 import { colors, spacing, radius } from '../utils/theme';
@@ -43,7 +43,7 @@ export default function AuthScreen() {
       const hhName = householdName.trim() || `${name}의 집`;
       const household = await createHousehold(user.uid, hhName);
       // Update user with householdId
-      const { upsertUser } = await import('../services/firestoreService');
+      const { upsertUser } = await import('../services/dbService');
       const updatedUser = { ...user, householdId: household.id };
       await upsertUser(updatedUser);
       setUser(updatedUser);

@@ -10,7 +10,7 @@ import { useStore } from '../store/useStore';
 import {
   addCat as fsAddCat, updateCat, deleteCat as fsDeleteCat,
   addRecipe as fsAddRecipe, updateRecipe, deleteRecipe as fsDeleteRecipe,
-} from '../services/firestoreService';
+} from '../services/dbService';
 import { Button, Card, Input, BottomSheet, Tag, EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import type { Cat, Recipe, TimeSlot } from '../types';

@@ -11,7 +11,7 @@ import { Button, Card, SectionTitle, EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { formatDisplayDate, formatFullDate, getLast30Days, toDateKey } from '../utils/date';
 import { exportAsPDF, exportAsCSV } from '../services/exportService';
-import { getChecksForDateRange, getLogsForDateRange } from '../services/firestoreService';
+import { getChecksForDateRange, getLogsForDateRange } from '../services/dbService';
 
 export default function RecordsScreen() {
   const { cats, recipes, checks, logs, household } = useStore();

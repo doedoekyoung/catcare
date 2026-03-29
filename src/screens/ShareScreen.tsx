@@ -13,9 +13,9 @@ import {
   subscribeToRecipes,
   subscribeToChecks,
   upsertCheck,
-} from '../services/firestoreService';
+} from '../services/dbService';
 import { signInAsGuest } from '../services/authService';
-import { getAuth } from 'firebase/auth';
+import { supabase } from '../services/supabase';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { Tag } from '../components/ui';
 import { toDateKey, formatFullDate } from '../utils/date';
@@ -73,8 +73,8 @@ export default function ShareScreen() {
   const handleToggleCheck = useCallback(
     async (recipe: Recipe, catId: string) => {
       if (!household) return;
-      const auth = getAuth();
-      const uid = auth.currentUser?.uid ?? 'guest';
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id ?? 'guest';
       const key = `${today}_${recipe.id}_${catId}`;
       const current = checks[key];
       const newDone = !(current?.done ?? false);

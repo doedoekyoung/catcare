@@ -8,7 +8,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { signOut } from '../services/authService';
-import { regenerateShareToken } from '../services/firestoreService';
+import { regenerateShareToken } from '../services/dbService';
 import { Button, Card } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 

@@ -9,12 +9,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useStore, selectActiveRecipesForCats, selectCompletionRate } from '../store/useStore';
-import { upsertCheck } from '../services/firestoreService';
+import { upsertCheck } from '../services/dbService';
 import { Button, Card, SectionTitle, Tag, ProgressBar, EmptyState, BottomSheet, Input } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { toDateKey, formatDisplayDate } from '../utils/date';
 import type { CheckRecord, Recipe } from '../types';
-import { upsertLog } from '../services/firestoreService';
+import { upsertLog } from '../services/dbService';
 
 const TIME_LABELS: Record<string, string> = { am: '☀️ 오전', pm: '🌙 오후', all: '📅 종일' };
 

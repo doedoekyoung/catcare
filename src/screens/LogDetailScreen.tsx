@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useStore } from '../store/useStore';
-import { upsertCheck, upsertLog, uploadPhoto, deleteLog } from '../services/firestoreService';
+import { upsertCheck, upsertLog, uploadPhoto, deleteLog } from '../services/dbService';
 import { Card, Input, Button, BottomSheet, Tag } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { formatFullDate, formatTime } from '../utils/date';
