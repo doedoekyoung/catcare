@@ -4,15 +4,13 @@ import {
   getAuth,
   initializeAuth,
   getReactNativePersistence,
+  browserLocalPersistence,
   Auth,
 } from 'firebase/auth';
-import {
-  getFirestore,
-  Firestore,
-  enableIndexedDbPersistence,
-} from 'firebase/firestore';
+import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getAnalytics, Analytics, isSupported, logEvent as firebaseLogEvent } from 'firebase/analytics';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -34,18 +32,15 @@ let analytics: Analytics | null = null;
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
 
-  // React Native auth persistence via AsyncStorage
+  // 웹은 browserLocalPersistence, 네이티브는 AsyncStorage
   auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage),
+    persistence: Platform.OS === 'web'
+      ? browserLocalPersistence
+      : getReactNativePersistence(AsyncStorage),
   });
 
   db = getFirestore(app);
   storage = getStorage(app);
-
-  // Enable offline persistence (REQ-M01~M08: offline required)
-  enableIndexedDbPersistence(db).catch(() => {
-    // Persistence may fail in some environments — fail silently
-  });
 
   // Analytics: web 환경에서만 초기화
   isSupported().then((supported) => {
