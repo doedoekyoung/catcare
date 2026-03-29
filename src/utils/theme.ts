@@ -26,13 +26,26 @@ export const colors = {
   successText: '#388E3C',
   warnBg: '#FFF8E1',
   warnText: '#795548',
-  amColor: '#E65100',
-  amBg: '#FFF3E0',
-  pmColor: '#1565C0',
-  pmBg: '#E3F2FD',
-  allColor: '#6A1B9A',
-  allBg: '#F3E5F5',
+  morningColor: '#E65100',
+  morningBg: '#FFF3E0',
+  lunchColor: '#2E7D32',
+  lunchBg: '#E8F5E9',
+  eveningColor: '#1565C0',
+  eveningBg: '#E3F2FD',
 } as const;
+
+export const CAT_TAG_COLORS = [
+  '#C4956A', // caramel (default)
+  '#7A9E7E', // sage
+  '#6B8EC4', // blue
+  '#C46A4A', // terracotta
+  '#9B6AC4', // purple
+  '#C4B06A', // gold
+  '#4AB8B8', // teal
+  '#C46A8E', // pink
+  '#6A9EC4', // sky
+  '#8EC46A', // green
+] as const;
 
 export const spacing = {
   xs: 4,

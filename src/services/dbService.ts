@@ -39,10 +39,16 @@ function toCat(row: any): Cat {
     id: row.id,
     name: row.name,
     emoji: row.emoji,
-    breed: row.breed,
-    birthDate: row.birth_date,
-    weight: row.weight,
     photoUri: row.photo_uri,
+    gender: row.gender,
+    tagColor: row.tag_color,
+    birthYear: row.birth_year,
+    birthMonth: row.birth_month,
+    birthDay: row.birth_day,
+    metDate: row.met_date,
+    notes: row.notes,
+    breed: row.breed,
+    weight: row.weight,
     ownerId: row.owner_id,
     householdId: row.household_id,
     createdAt: row.created_at,
@@ -54,7 +60,7 @@ function toRecipe(row: any): Recipe {
   return {
     id: row.id,
     name: row.name,
-    time: row.time,
+    times: row.times ?? [],
     catIds: row.cat_ids ?? [],
     active: row.active,
     householdId: row.household_id,
@@ -179,11 +185,16 @@ export async function addCat(
     .from(TABLES.CATS)
     .insert({
       name: catData.name,
-      emoji: catData.emoji,
-      breed: catData.breed ?? null,
-      birth_date: catData.birthDate ?? null,
-      weight: catData.weight ?? null,
       photo_uri: catData.photoUri ?? null,
+      gender: catData.gender ?? null,
+      tag_color: catData.tagColor ?? null,
+      birth_year: catData.birthYear ?? null,
+      birth_month: catData.birthMonth ?? null,
+      birth_day: catData.birthDay ?? null,
+      met_date: catData.metDate ?? null,
+      notes: catData.notes ?? null,
+      breed: catData.breed ?? null,
+      weight: catData.weight ?? null,
       owner_id: catData.ownerId,
       household_id: householdId,
       created_at: now,
@@ -202,11 +213,16 @@ export async function updateCat(
 ): Promise<void> {
   const update: Record<string, any> = { updated_at: toISOString(new Date()) };
   if (data.name !== undefined) update.name = data.name;
-  if (data.emoji !== undefined) update.emoji = data.emoji;
-  if (data.breed !== undefined) update.breed = data.breed;
-  if (data.birthDate !== undefined) update.birth_date = data.birthDate;
-  if (data.weight !== undefined) update.weight = data.weight;
   if (data.photoUri !== undefined) update.photo_uri = data.photoUri;
+  if (data.gender !== undefined) update.gender = data.gender;
+  if (data.tagColor !== undefined) update.tag_color = data.tagColor;
+  if (data.birthYear !== undefined) update.birth_year = data.birthYear;
+  if (data.birthMonth !== undefined) update.birth_month = data.birthMonth;
+  if (data.birthDay !== undefined) update.birth_day = data.birthDay;
+  if (data.metDate !== undefined) update.met_date = data.metDate;
+  if (data.notes !== undefined) update.notes = data.notes;
+  if (data.breed !== undefined) update.breed = data.breed;
+  if (data.weight !== undefined) update.weight = data.weight;
 
   const { error } = await supabase
     .from(TABLES.CATS)
@@ -260,7 +276,7 @@ export async function addRecipe(
     .from(TABLES.RECIPES)
     .insert({
       name: data.name,
-      time: data.time,
+      times: data.times,
       cat_ids: data.catIds,
       active: data.active,
       household_id: householdId,
@@ -281,7 +297,7 @@ export async function updateRecipe(
 ): Promise<void> {
   const update: Record<string, any> = { updated_at: toISOString(new Date()) };
   if (data.name !== undefined) update.name = data.name;
-  if (data.time !== undefined) update.time = data.time;
+  if (data.times !== undefined) update.times = data.times;
   if (data.catIds !== undefined) update.cat_ids = data.catIds;
   if (data.active !== undefined) update.active = data.active;
   if (data.memo !== undefined) update.memo = data.memo;

@@ -1,15 +1,21 @@
 // src/types/index.ts
 
-export type TimeSlot = 'am' | 'pm' | 'all';
+export type TimeSlot = 'morning' | 'lunch' | 'evening';
 
 export interface Cat {
   id: string;
   name: string;
-  emoji: string;
-  breed?: string;
-  birthDate?: string;         // ISO date string
-  weight?: number;            // kg
+  emoji?: string;              // deprecated — photoUri 우선
   photoUri?: string;
+  gender?: 'male' | 'female' | 'unknown';
+  tagColor?: string;           // 홈 탭 & 루틴 카드 색상
+  birthYear?: number;
+  birthMonth?: number;
+  birthDay?: number;
+  metDate?: string;            // 만난 날 (ISO date)
+  notes?: string;              // 특이사항 자유 기재
+  breed?: string;
+  weight?: number;
   ownerId: string;
   householdId: string;
   createdAt: string;
@@ -19,9 +25,9 @@ export interface Cat {
 export interface Recipe {
   id: string;
   name: string;
-  time: TimeSlot;
-  catIds: string[];           // REQ-M05: cat-recipe connection
-  active: boolean;            // REQ-V5-02: activate/deactivate
+  times: TimeSlot[];           // 복수 시간대 선택
+  catIds: string[];
+  active: boolean;
   householdId: string;
   memo?: string;
   createdAt: string;
@@ -30,22 +36,22 @@ export interface Recipe {
 
 export interface CheckRecord {
   id: string;
-  date: string;               // 'YYYY-MM-DD'
+  date: string;
   recipeId: string;
   catId: string;
   done: boolean;
-  doneAt?: string;            // ISO timestamp
-  doneBy?: string;            // userId
-  memo?: string;              // REQ-V4-03: per-item memo
+  doneAt?: string;
+  doneBy?: string;
+  memo?: string;
   householdId: string;
 }
 
 export interface DailyLog {
   id: string;
-  date: string;               // 'YYYY-MM-DD'
-  catId?: string;             // optional: per-cat log
-  text: string;               // REQ-V4-01
-  photoUri?: string;          // REQ-V4-04
+  date: string;
+  catId?: string;
+  text: string;
+  photoUri?: string;
   householdId: string;
   authorId: string;
   createdAt: string;
@@ -66,12 +72,11 @@ export interface Household {
   name: string;
   ownerId: string;
   memberIds: string[];
-  shareToken?: string;        // REQ-V1-04: share link token
-  shareTokenExpiry?: string;  // ISO timestamp
+  shareToken?: string;
+  shareTokenExpiry?: string;
   createdAt: string;
 }
 
-// ── Navigation Types ──────────────────────────────────────────────────────────
 export type RootStackParamList = {
   Onboarding: undefined;
   Main: undefined;
@@ -88,19 +93,17 @@ export type MainTabParamList = {
   Settings: undefined;
 };
 
-// ── Store Types ───────────────────────────────────────────────────────────────
 export interface AppState {
   user: User | null;
   household: Household | null;
   cats: Cat[];
   recipes: Recipe[];
-  checks: Record<string, CheckRecord>;   // key: `${date}_${recipeId}_${catId}`
+  checks: Record<string, CheckRecord>;
   logs: DailyLog[];
   selectedCatIds: string[];
   isLoading: boolean;
   isOnboarded: boolean;
 
-  // Actions
   setUser: (user: User | null) => void;
   setHousehold: (h: Household | null) => void;
   setCats: (cats: Cat[]) => void;

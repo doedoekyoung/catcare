@@ -17,7 +17,6 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [householdName, setHouseholdName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -40,9 +39,7 @@ export default function AuthScreen() {
     setLoading(true); setError('');
     try {
       const user = await signUpWithEmail(email, password, name);
-      const hhName = householdName.trim() || `${name}의 집`;
-      const household = await createHousehold(user.uid, hhName);
-      // Update user with householdId
+      const household = await createHousehold(user.uid, `${name}의 집`);
       const { upsertUser } = await import('../services/dbService');
       const updatedUser = { ...user, householdId: household.id };
       await upsertUser(updatedUser);
@@ -63,13 +60,11 @@ export default function AuthScreen() {
         style={styles.kav}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {/* Logo */}
           <View style={styles.logoWrap}>
             <Text style={styles.logo}>🐱 CatCare</Text>
             <Text style={styles.logoSub}>고양이 돌봄 루틴 관리</Text>
           </View>
 
-          {/* Tab */}
           <View style={styles.tabs}>
             <TouchableOpacity
               style={[styles.tab, mode === 'login' && styles.tabActive]}
@@ -101,20 +96,12 @@ export default function AuthScreen() {
             secureTextEntry
           />
           {mode === 'signup' && (
-            <>
-              <Input
-                label="이름 *"
-                value={name}
-                onChangeText={setName}
-                placeholder="집사 이름"
-              />
-              <Input
-                label="가구 이름 (선택)"
-                value={householdName}
-                onChangeText={setHouseholdName}
-                placeholder="예: 루나네 집 (비우면 자동 생성)"
-              />
-            </>
+            <Input
+              label="이름 *"
+              value={name}
+              onChangeText={setName}
+              placeholder="집사 이름"
+            />
           )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -136,7 +123,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.cream },
   kav: { flex: 1 },
-  content: { padding: spacing.xl, justifyContent: 'center', minHeight: '100%' },
+  content: { padding: spacing.xl, justifyContent: 'center', minHeight: '100%' as any },
   logoWrap: { alignItems: 'center', marginBottom: spacing.xl },
   logo: { fontSize: 36, fontWeight: '800', color: colors.caramel },
   logoSub: { fontSize: 14, color: colors.muted, marginTop: 6 },

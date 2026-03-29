@@ -1,22 +1,25 @@
 // src/screens/HomeScreen.tsx
-// REQ-M03, M06, M07, M09, V1-01, V2-03~05, V3-01~02, V4-01, V4-05
 
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, Alert,
+  RefreshControl, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { useStore, selectActiveRecipesForCats, selectCompletionRate } from '../store/useStore';
-import { upsertCheck } from '../services/dbService';
-import { Button, Card, SectionTitle, Tag, ProgressBar, EmptyState, BottomSheet, Input } from '../components/ui';
+import { upsertCheck, upsertLog } from '../services/dbService';
+import { Card, SectionTitle, ProgressBar, EmptyState, BottomSheet, Input, Button } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { toDateKey, formatDisplayDate } from '../utils/date';
-import type { CheckRecord, Recipe } from '../types';
-import { upsertLog } from '../services/dbService';
+import type { CheckRecord, Recipe, TimeSlot } from '../types';
 
-const TIME_LABELS: Record<string, string> = { am: '☀️ 오전', pm: '🌙 오후', all: '📅 종일' };
+const TIME_LABELS: Record<TimeSlot, string> = {
+  morning: '🌅 아침',
+  lunch: '☀️ 점심',
+  evening: '🌙 저녁',
+};
+
+const TIME_SLOTS: TimeSlot[] = ['morning', 'lunch', 'evening'];
 
 export default function HomeScreen() {
   const {
@@ -26,15 +29,20 @@ export default function HomeScreen() {
 
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logText, setLogText] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing] = useState(false);
 
   const today = toDateKey();
   const activeRecipes = selectActiveRecipesForCats(recipes, selectedCatIds);
   const { done, total, pct } = selectCompletionRate(recipes, checks, today, selectedCatIds);
   const todayLog = logs.find((l) => l.date === today);
 
-  const grouped = { am: [] as Recipe[], pm: [] as Recipe[], all: [] as Recipe[] };
-  activeRecipes.forEach((r) => grouped[r.time].push(r));
+  // 시간대별 그룹 — 복수 시간대 지원
+  const grouped: Record<TimeSlot, Recipe[]> = { morning: [], lunch: [], evening: [] };
+  activeRecipes.forEach((r) => {
+    r.times.forEach((t) => {
+      if (!grouped[t].includes(r)) grouped[t].push(r);
+    });
+  });
 
   const handleToggleCheck = useCallback(
     async (recipe: Recipe) => {
@@ -44,10 +52,7 @@ export default function HomeScreen() {
       const current = checks[key];
       const newDone = !(current?.done ?? false);
       const record: CheckRecord = {
-        id: key,
-        date: today,
-        recipeId: recipe.id,
-        catId,
+        id: key, date: today, recipeId: recipe.id, catId,
         done: newDone,
         doneAt: newDone ? new Date().toISOString() : undefined,
         doneBy: user.uid,
@@ -65,10 +70,8 @@ export default function HomeScreen() {
     const existing = logs.find((l) => l.date === today);
     const log = {
       id: existing?.id ?? `${today}_${user.uid}`,
-      date: today,
-      text: logText.trim(),
-      householdId: household.id,
-      authorId: user.uid,
+      date: today, text: logText.trim(),
+      householdId: household.id, authorId: user.uid,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -85,7 +88,6 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.dateLabel}>{formatDisplayDate(today)}</Text>
@@ -102,23 +104,36 @@ export default function HomeScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} tintColor={colors.caramel} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} tintColor={colors.caramel} />}
       >
-        {/* Cat selector chips (REQ-V1-01) */}
+        {/* Cat selector chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
           <View style={styles.chips}>
             {cats.map((cat) => {
               const sel = selectedCatIds.includes(cat.id);
+              const tagColor = cat.tagColor ?? colors.caramel;
               return (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[styles.chip, sel && styles.chipSelected]}
+                  style={[
+                    styles.chip,
+                    { borderColor: tagColor },
+                    sel
+                      ? { backgroundColor: tagColor }
+                      : { backgroundColor: tagColor + '15' },
+                  ]}
                   onPress={() => toggleCatSelection(cat.id)}
                 >
-                  <Text style={styles.chipEmoji}>{cat.emoji}</Text>
-                  <Text style={[styles.chipText, sel && styles.chipTextSel]}>{cat.name}</Text>
+                  {cat.photoUri ? (
+                    <Image source={{ uri: cat.photoUri }} style={styles.chipPhoto} />
+                  ) : (
+                    <Text style={[styles.chipInitial, { color: sel ? '#fff' : tagColor }]}>
+                      {cat.name.charAt(0)}
+                    </Text>
+                  )}
+                  <Text style={[styles.chipText, { color: sel ? '#fff' : tagColor }]}>
+                    {cat.name}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
@@ -155,7 +170,7 @@ export default function HomeScreen() {
         )}
 
         {/* Checklist by time group */}
-        {(['am', 'pm', 'all'] as const).map((t) => {
+        {TIME_SLOTS.map((t) => {
           if (!grouped[t].length) return null;
           return (
             <View key={t} style={styles.section}>
@@ -165,17 +180,24 @@ export default function HomeScreen() {
                 const key = `${today}_${recipe.id}_${catId}`;
                 const isDone = checks[key]?.done ?? false;
                 const cat = cats.find((c) => c.id === catId);
+                const tagColor = cat?.tagColor ?? colors.caramel;
                 const sharedCatNames = recipe.catIds
                   .map((id) => cats.find((c) => c.id === id)?.name)
                   .filter(Boolean).join(', ');
                 return (
                   <TouchableOpacity
-                    key={recipe.id}
-                    style={[styles.checkItem, isDone && styles.checkItemDone]}
+                    key={`${recipe.id}-${t}`}
+                    style={[
+                      styles.checkItem,
+                      isDone
+                        ? { backgroundColor: tagColor + '18', borderColor: tagColor + '60' }
+                        : { backgroundColor: '#fff', borderColor: tagColor + '50' },
+                      { borderLeftWidth: 3, borderLeftColor: tagColor },
+                    ]}
                     onPress={() => handleToggleCheck(recipe)}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.checkBox, isDone && styles.checkBoxDone]}>
+                    <View style={[styles.checkBox, isDone && { backgroundColor: tagColor, borderColor: tagColor }]}>
                       {isDone && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
                     </View>
                     <View style={styles.checkText}>
@@ -184,7 +206,6 @@ export default function HomeScreen() {
                       </Text>
                       <Text style={styles.checkMeta}>{sharedCatNames}</Text>
                     </View>
-                    <Tag label={t === 'am' ? '오전' : t === 'pm' ? '오후' : '종일'} type={t} />
                   </TouchableOpacity>
                 );
               })}
@@ -218,12 +239,7 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      {/* Log Modal */}
-      <BottomSheet
-        visible={logModalVisible}
-        onClose={() => setLogModalVisible(false)}
-        title="✏️ 오늘의 기록"
-      >
+      <BottomSheet visible={logModalVisible} onClose={() => setLogModalVisible(false)} title="✏️ 오늘의 기록">
         <Input
           label="특이사항 메모"
           value={logText}
@@ -263,13 +279,11 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingVertical: 8, paddingHorizontal: 14,
-    borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border,
-    backgroundColor: colors.cream,
+    borderRadius: radius.full, borderWidth: 1.5,
   },
-  chipSelected: { backgroundColor: colors.caramel, borderColor: colors.caramel },
-  chipEmoji: { fontSize: 16 },
-  chipText: { fontSize: 13, color: colors.brownMid },
-  chipTextSel: { color: '#fff' },
+  chipPhoto: { width: 20, height: 20, borderRadius: 10 },
+  chipInitial: { fontSize: 14, fontWeight: '700', width: 20, textAlign: 'center' },
+  chipText: { fontSize: 13, fontWeight: '500' },
   progressWrap: { marginBottom: spacing.lg },
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   progressLabel: { fontSize: 13, color: colors.brownMid },
@@ -285,16 +299,13 @@ const styles = StyleSheet.create({
   checkItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: spacing.md, borderRadius: radius.md,
-    borderWidth: 1.5, borderColor: colors.border,
-    backgroundColor: '#fff', marginBottom: 8, ...shadow.sm,
+    borderWidth: 1.5, marginBottom: 8, ...shadow.sm,
   },
-  checkItemDone: { backgroundColor: colors.checkedBg, borderColor: colors.sageMid },
   checkBox: {
     width: 22, height: 22, borderRadius: 7,
     borderWidth: 2, borderColor: colors.border,
     alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff',
   },
-  checkBoxDone: { backgroundColor: colors.sage, borderColor: colors.sage },
   checkText: { flex: 1 },
   checkTitle: { fontSize: 14, color: colors.charcoal, lineHeight: 20 },
   checkTitleDone: { textDecorationLine: 'line-through', color: colors.muted },

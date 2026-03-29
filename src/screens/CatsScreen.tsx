@@ -1,62 +1,125 @@
 // src/screens/CatsScreen.tsx
-// REQ-M01~M05, V1-02, V2-01~02, V5-01~02
 
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { useStore } from '../store/useStore';
 import {
   addCat as fsAddCat, updateCat, deleteCat as fsDeleteCat,
   addRecipe as fsAddRecipe, updateRecipe, deleteRecipe as fsDeleteRecipe,
 } from '../services/dbService';
-import { Button, Card, Input, BottomSheet, Tag, EmptyState } from '../components/ui';
-import { colors, spacing, radius, shadow } from '../utils/theme';
+import { Button, Input, BottomSheet, EmptyState } from '../components/ui';
+import { colors, spacing, radius, shadow, CAT_TAG_COLORS } from '../utils/theme';
 import type { Cat, Recipe, TimeSlot } from '../types';
 
-const EMOJIS = ['🐱', '🐈', '🐈‍⬛', '😺', '🦁', '🐯', '🐻', '🐼'];
-const TIME_OPTIONS: { value: TimeSlot; label: string }[] = [
-  { value: 'am', label: '☀️ 오전' },
-  { value: 'pm', label: '🌙 오후' },
-  { value: 'all', label: '📅 종일' },
+const GENDER_OPTIONS = [
+  { value: 'male' as const, label: '수컷 ♂' },
+  { value: 'female' as const, label: '암컷 ♀' },
+  { value: 'unknown' as const, label: '모름' },
 ];
+
+const TIME_OPTIONS: { value: TimeSlot; label: string }[] = [
+  { value: 'morning', label: '🌅 아침' },
+  { value: 'lunch', label: '☀️ 점심' },
+  { value: 'evening', label: '🌙 저녁' },
+];
+
+const TIME_ICONS: Record<TimeSlot, string> = {
+  morning: '🌅',
+  lunch: '☀️',
+  evening: '🌙',
+};
+
+const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export default function CatsScreen() {
   const { cats, recipes, household, user, setCats, setRecipes } = useStore();
 
-  // Cat modal state
+  // ── Cat modal state ───────────────────────────────────────────────────────────
   const [catModal, setCatModal] = useState(false);
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
   const [catName, setCatName] = useState('');
-  const [catEmoji, setCatEmoji] = useState('🐱');
+  const [catPhotoUri, setCatPhotoUri] = useState('');
+  const [catGender, setCatGender] = useState<'male' | 'female' | 'unknown' | ''>('');
+  const [catTagColor, setCatTagColor] = useState(CAT_TAG_COLORS[0]);
+  const [catBirthYear, setCatBirthYear] = useState('');
+  const [catBirthMonth, setCatBirthMonth] = useState<number | null>(null);
+  const [catBirthDay, setCatBirthDay] = useState<number | null>(null);
+  const [catMetDate, setCatMetDate] = useState('');
+  const [catNotes, setCatNotes] = useState('');
 
-  // Recipe modal state
+  // ── Recipe modal state ────────────────────────────────────────────────────────
   const [recipeModal, setRecipeModal] = useState(false);
   const [targetCatId, setTargetCatId] = useState('');
   const [recipeName, setRecipeName] = useState('');
-  const [recipeTime, setRecipeTime] = useState<TimeSlot>('am');
+  const [recipeTimes, setRecipeTimes] = useState<TimeSlot[]>(['morning']);
   const [recipeSharedCatIds, setRecipeSharedCatIds] = useState<string[]>([]);
 
-  // ── Cat CRUD ─────────────────────────────────────────────────────────────────
+  // ── Image picker ──────────────────────────────────────────────────────────────
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled) setCatPhotoUri(result.assets[0].uri);
+  };
+
+  // ── Cat CRUD ──────────────────────────────────────────────────────────────────
 
   const openAddCat = () => {
-    setEditingCat(null); setCatName(''); setCatEmoji('🐱'); setCatModal(true);
+    setEditingCat(null);
+    setCatName(''); setCatPhotoUri(''); setCatGender('');
+    setCatTagColor(CAT_TAG_COLORS[0]);
+    setCatBirthYear(''); setCatBirthMonth(null); setCatBirthDay(null);
+    setCatMetDate(''); setCatNotes('');
+    setCatModal(true);
   };
+
   const openEditCat = (cat: Cat) => {
-    setEditingCat(cat); setCatName(cat.name); setCatEmoji(cat.emoji); setCatModal(true);
+    setEditingCat(cat);
+    setCatName(cat.name);
+    setCatPhotoUri(cat.photoUri ?? '');
+    setCatGender((cat.gender as any) ?? '');
+    setCatTagColor(cat.tagColor ?? CAT_TAG_COLORS[0]);
+    setCatBirthYear(cat.birthYear ? String(cat.birthYear) : '');
+    setCatBirthMonth(cat.birthMonth ?? null);
+    setCatBirthDay(cat.birthDay ?? null);
+    setCatMetDate(cat.metDate ?? '');
+    setCatNotes(cat.notes ?? '');
+    setCatModal(true);
   };
 
   const handleSaveCat = async () => {
     if (!catName.trim() || !household || !user) return;
+    const catData: Partial<Cat> = {
+      name: catName.trim(),
+      photoUri: catPhotoUri || undefined,
+      gender: catGender || undefined,
+      tagColor: catTagColor,
+      birthYear: catBirthYear ? Number(catBirthYear) : undefined,
+      birthMonth: catBirthMonth ?? undefined,
+      birthDay: catBirthDay ?? undefined,
+      metDate: catMetDate || undefined,
+      notes: catNotes || undefined,
+    };
+
     if (editingCat) {
-      await updateCat(household.id, editingCat.id, { name: catName.trim(), emoji: catEmoji });
-      setCats(cats.map((c) => c.id === editingCat.id ? { ...c, name: catName.trim(), emoji: catEmoji } : c));
+      await updateCat(household.id, editingCat.id, catData);
+      setCats(cats.map((c) => c.id === editingCat.id ? { ...c, ...catData } : c));
     } else {
       const cat = await fsAddCat(household.id, {
-        name: catName.trim(), emoji: catEmoji,
-        ownerId: user.uid, householdId: household.id,
-      });
+        ...catData,
+        name: catName.trim(),
+        ownerId: user.uid,
+        householdId: household.id,
+      } as Omit<Cat, 'id' | 'createdAt' | 'updatedAt'>);
       setCats([...cats, cat]);
     }
     setCatModal(false);
@@ -64,7 +127,7 @@ export default function CatsScreen() {
 
   const handleDeleteCat = (cat: Cat) => {
     Alert.alert(
-      `${cat.emoji} ${cat.name} 삭제`,
+      `${cat.name} 삭제`,
       '이 고양이와 연결된 루틴도 모두 삭제됩니다. 계속할까요?',
       [
         { text: '취소', style: 'cancel' },
@@ -74,10 +137,7 @@ export default function CatsScreen() {
             if (!household) return;
             await fsDeleteCat(household.id, cat.id);
             setCats(cats.filter((c) => c.id !== cat.id));
-            setRecipes(recipes.filter((r) => {
-              const updated = r.catIds.filter((id) => id !== cat.id);
-              return updated.length > 0;
-            }));
+            setRecipes(recipes.filter((r) => r.catIds.filter((id) => id !== cat.id).length > 0));
           },
         },
       ]
@@ -88,16 +148,16 @@ export default function CatsScreen() {
 
   const openAddRecipe = (catId: string) => {
     setTargetCatId(catId);
-    setRecipeName(''); setRecipeTime('am'); setRecipeSharedCatIds([catId]);
+    setRecipeName(''); setRecipeTimes(['morning']); setRecipeSharedCatIds([catId]);
     setRecipeModal(true);
   };
 
   const handleSaveRecipe = async () => {
-    if (!recipeName.trim() || !household) return;
+    if (!recipeName.trim() || !household || recipeTimes.length === 0) return;
     const catIds = recipeSharedCatIds.length > 0 ? recipeSharedCatIds : [targetCatId];
     const recipe = await fsAddRecipe(household.id, {
       name: recipeName.trim(),
-      time: recipeTime,
+      times: recipeTimes,
       catIds,
       active: true,
       householdId: household.id,
@@ -126,6 +186,12 @@ export default function CatsScreen() {
     setRecipes(recipes.map((r) => r.id === recipe.id ? { ...r, active: !r.active } : r));
   };
 
+  const toggleRecipeTime = (t: TimeSlot) => {
+    setRecipeTimes((prev) =>
+      prev.includes(t) ? prev.filter((v) => v !== t) : [...prev, t]
+    );
+  };
+
   const toggleSharedCat = (catId: string) => {
     setRecipeSharedCatIds((prev) =>
       prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
@@ -144,10 +210,7 @@ export default function CatsScreen() {
         <Button label="+ 고양이" size="sm" onPress={openAddCat} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {cats.length === 0 && (
           <EmptyState
             emoji="🐱"
@@ -159,22 +222,37 @@ export default function CatsScreen() {
 
         {cats.map((cat) => {
           const catRecipes = recipes.filter((r) => r.catIds.includes(cat.id));
+          const tagColor = cat.tagColor ?? colors.caramel;
           return (
             <View key={cat.id}>
               {/* Cat Card */}
               <View style={[styles.catCard, shadow.sm]}>
-                <View style={styles.catAvatar}>
-                  <Text style={{ fontSize: 26 }}>{cat.emoji}</Text>
-                </View>
+                <TouchableOpacity onPress={() => openEditCat(cat)}>
+                  <View style={[styles.catAvatar, { backgroundColor: tagColor + '30', borderColor: tagColor }]}>
+                    {cat.photoUri ? (
+                      <Image source={{ uri: cat.photoUri }} style={styles.catAvatarImg} />
+                    ) : (
+                      <Text style={[styles.catAvatarInitial, { color: tagColor }]}>
+                        {cat.name.charAt(0)}
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
                 <View style={styles.catInfo}>
-                  <Text style={styles.catName}>{cat.name}</Text>
-                  <Text style={styles.catMeta}>루틴 {catRecipes.length}개 등록됨</Text>
+                  <View style={styles.catNameRow}>
+                    <Text style={styles.catName}>{cat.name}</Text>
+                    <View style={[styles.tagDot, { backgroundColor: tagColor }]} />
+                  </View>
+                  <Text style={styles.catMeta}>
+                    {cat.gender === 'male' ? '수컷' : cat.gender === 'female' ? '암컷' : ''}
+                    {cat.gender && (cat.birthYear || cat.metDate) ? ' · ' : ''}
+                    {cat.birthYear ? `${cat.birthYear}년생` : ''}
+                    {(!cat.birthYear && cat.metDate) ? `만난 날: ${cat.metDate}` : ''}
+                    {!cat.gender && !cat.birthYear && !cat.metDate ? `루틴 ${catRecipes.length}개` : ''}
+                  </Text>
                 </View>
                 <View style={styles.catActions}>
-                  <TouchableOpacity
-                    style={styles.iconBtn}
-                    onPress={() => openEditCat(cat)}
-                  >
+                  <TouchableOpacity style={styles.iconBtn} onPress={() => openEditCat(cat)}>
                     <Text style={{ fontSize: 15 }}>✏️</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -186,40 +264,39 @@ export default function CatsScreen() {
                 </View>
               </View>
 
-              {/* Recipes for this cat */}
+              {/* Recipes */}
               <View style={styles.recipeList}>
                 {catRecipes.map((r) => (
-                  <View key={r.id} style={styles.recipeCard}>
-                    <Text style={styles.recipeIcon}>
-                      {r.time === 'am' ? '☀️' : r.time === 'pm' ? '🌙' : '📅'}
-                    </Text>
+                  <View key={r.id} style={[styles.recipeCard, { borderLeftColor: tagColor, borderLeftWidth: 3 }]}>
                     <View style={styles.recipeInfo}>
-                      <Text
-                        style={[
-                          styles.recipeName,
-                          !r.active && styles.recipeNameInactive,
-                        ]}
-                      >
+                      <Text style={[styles.recipeName, !r.active && styles.recipeNameInactive]}>
                         {r.name}
                       </Text>
-                      {r.catIds.length > 1 && (
-                        <Text style={styles.recipeMeta}>
-                          공유: {r.catIds.map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean).join(', ')}
-                        </Text>
-                      )}
+                      <View style={styles.recipeTimeTags}>
+                        {r.times.map((t) => (
+                          <View key={t} style={[styles.timeTag, { backgroundColor: tagColor + '20', borderColor: tagColor + '60' }]}>
+                            <Text style={[styles.timeTagText, { color: tagColor }]}>
+                              {TIME_ICONS[t]} {t === 'morning' ? '아침' : t === 'lunch' ? '점심' : '저녁'}
+                            </Text>
+                          </View>
+                        ))}
+                        {r.catIds.length > 1 && (
+                          <Text style={styles.recipeMeta}>
+                            공유: {r.catIds.map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean).join(', ')}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                     <View style={styles.recipeActions}>
-                      <Tag label={r.time === 'am' ? '오전' : r.time === 'pm' ? '오후' : '종일'} type={r.time} />
                       <TouchableOpacity onPress={() => handleToggleActive(r)} style={styles.smallBtn}>
                         <Text style={{ fontSize: 16 }}>{r.active ? '✅' : '⏸️'}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => handleDeleteRecipe(r)} style={styles.smallBtn}>
-                        <Text style={{ fontSize: 14 }}>✕</Text>
+                        <Text style={{ fontSize: 14, color: colors.muted }}>✕</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 ))}
-
                 <Button
                   label="+ 루틴 항목 추가"
                   variant="secondary"
@@ -237,38 +314,135 @@ export default function CatsScreen() {
       <BottomSheet
         visible={catModal}
         onClose={() => setCatModal(false)}
-        title={editingCat ? '🐱 고양이 수정' : '🐱 고양이 등록'}
+        title={editingCat ? '고양이 수정' : '고양이 등록'}
       >
-        <Input
-          label="이름 *"
-          value={catName}
-          onChangeText={setCatName}
-          placeholder="예: 루나, 모카, 호두"
-          maxLength={20}
-        />
-        <Text style={styles.emojiLabel}>이모지 선택</Text>
-        <View style={styles.emojiRow}>
-          {EMOJIS.map((e) => (
-            <TouchableOpacity
-              key={e}
-              style={[styles.emojiChip, catEmoji === e && styles.emojiChipSel]}
-              onPress={() => setCatEmoji(e)}
-            >
-              <Text style={{ fontSize: 22 }}>{e}</Text>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* 사진 */}
+          <View style={styles.photoRow}>
+            <TouchableOpacity style={styles.photoBox} onPress={pickImage}>
+              {catPhotoUri ? (
+                <Image source={{ uri: catPhotoUri }} style={styles.photoPreview} />
+              ) : (
+                <View style={[styles.photoPlaceholder, { backgroundColor: catTagColor + '30' }]}>
+                  <Text style={{ fontSize: 32 }}>📷</Text>
+                  <Text style={[styles.photoHint, { color: catTagColor }]}>사진 선택</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          ))}
-        </View>
-        <View style={styles.row}>
-          <Button label="취소" variant="secondary" onPress={() => setCatModal(false)} style={{ flex: 1 }} />
-          <Button label={editingCat ? '수정' : '등록'} onPress={handleSaveCat} style={{ flex: 1 }} />
-        </View>
+
+            {/* 태그 컬러 */}
+            <View style={styles.colorPickerWrap}>
+              <Text style={styles.fieldLabel}>태그 색상</Text>
+              <View style={styles.colorRow}>
+                {CAT_TAG_COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.colorDot, { backgroundColor: c }, catTagColor === c && styles.colorDotSel]}
+                    onPress={() => setCatTagColor(c)}
+                  />
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* 이름 */}
+          <Input
+            label="이름 *"
+            value={catName}
+            onChangeText={setCatName}
+            placeholder="예: 루나, 모카, 호두"
+            maxLength={20}
+          />
+
+          {/* 성별 */}
+          <Text style={styles.fieldLabel}>성별</Text>
+          <View style={styles.optionRow}>
+            {GENDER_OPTIONS.map((g) => (
+              <TouchableOpacity
+                key={g.value}
+                style={[styles.optionChip, catGender === g.value && styles.optionChipSel]}
+                onPress={() => setCatGender(g.value)}
+              >
+                <Text style={[styles.optionText, catGender === g.value && styles.optionTextSel]}>
+                  {g.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* 생년월일 */}
+          <Text style={styles.fieldLabel}>생년월일 (선택 가능)</Text>
+          <View style={styles.dateRow}>
+            <Input
+              placeholder="년도"
+              value={catBirthYear}
+              onChangeText={setCatBirthYear}
+              keyboardType="number-pad"
+              maxLength={4}
+              containerStyle={styles.yearInput}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthScroll}>
+              <View style={styles.monthRow}>
+                {MONTHS.map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.dateChip, catBirthMonth === m && { backgroundColor: catTagColor, borderColor: catTagColor }]}
+                    onPress={() => setCatBirthMonth(catBirthMonth === m ? null : m)}
+                  >
+                    <Text style={[styles.dateChipText, catBirthMonth === m && { color: '#fff' }]}>{m}월</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+          {catBirthMonth && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
+              <View style={styles.monthRow}>
+                {DAYS.map((d) => (
+                  <TouchableOpacity
+                    key={d}
+                    style={[styles.dateChip, catBirthDay === d && { backgroundColor: catTagColor, borderColor: catTagColor }]}
+                    onPress={() => setCatBirthDay(catBirthDay === d ? null : d)}
+                  >
+                    <Text style={[styles.dateChipText, catBirthDay === d && { color: '#fff' }]}>{d}일</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* 만난 날 */}
+          <Input
+            label="만난 날 (선택)"
+            value={catMetDate}
+            onChangeText={setCatMetDate}
+            placeholder="예: 2023-03-15"
+            maxLength={10}
+          />
+
+          {/* 특이사항 */}
+          <Input
+            label="특이사항 (선택)"
+            value={catNotes}
+            onChangeText={setCatNotes}
+            placeholder="알레르기, 지병, 성격 등 자유롭게 기록"
+            multiline
+            numberOfLines={3}
+            style={{ minHeight: 80 }}
+          />
+
+          <View style={[styles.row, { marginTop: spacing.md }]}>
+            <Button label="취소" variant="secondary" onPress={() => setCatModal(false)} style={{ flex: 1 }} />
+            <Button label={editingCat ? '수정' : '등록'} onPress={handleSaveCat} style={{ flex: 1 }} />
+          </View>
+        </ScrollView>
       </BottomSheet>
 
       {/* ── Add Recipe Modal ── */}
       <BottomSheet
         visible={recipeModal}
         onClose={() => setRecipeModal(false)}
-        title="📋 루틴 항목 등록"
+        title="루틴 항목 등록"
       >
         <Input
           label="항목명 *"
@@ -277,15 +451,15 @@ export default function CatsScreen() {
           placeholder="예: 아침 사료, 약 급여, 화장실 청소"
           maxLength={30}
         />
-        <Text style={styles.emojiLabel}>시간대</Text>
-        <View style={styles.timeRow}>
+        <Text style={styles.fieldLabel}>시간대 (복수 선택 가능)</Text>
+        <View style={styles.optionRow}>
           {TIME_OPTIONS.map((t) => (
             <TouchableOpacity
               key={t.value}
-              style={[styles.timeChip, recipeTime === t.value && styles.timeChipSel]}
-              onPress={() => setRecipeTime(t.value)}
+              style={[styles.optionChip, recipeTimes.includes(t.value) && styles.optionChipSel]}
+              onPress={() => toggleRecipeTime(t.value)}
             >
-              <Text style={[styles.timeText, recipeTime === t.value && styles.timeTextSel]}>
+              <Text style={[styles.optionText, recipeTimes.includes(t.value) && styles.optionTextSel]}>
                 {t.label}
               </Text>
             </TouchableOpacity>
@@ -293,15 +467,17 @@ export default function CatsScreen() {
         </View>
         {cats.length > 1 && (
           <>
-            <Text style={styles.emojiLabel}>적용 고양이 *</Text>
-            <View style={styles.emojiRow}>
+            <Text style={styles.fieldLabel}>적용 고양이 *</Text>
+            <View style={styles.optionRow}>
               {cats.map((c) => (
                 <TouchableOpacity
                   key={c.id}
-                  style={[styles.catChip, recipeSharedCatIds.includes(c.id) && styles.catChipSel]}
+                  style={[styles.catChip, recipeSharedCatIds.includes(c.id) && { backgroundColor: c.tagColor ?? colors.caramel, borderColor: c.tagColor ?? colors.caramel }]}
                   onPress={() => toggleSharedCat(c.id)}
                 >
-                  <Text>{c.emoji} {c.name}</Text>
+                  <Text style={[{ fontSize: 13, color: colors.brownMid }, recipeSharedCatIds.includes(c.id) && { color: '#fff' }]}>
+                    {c.name}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -326,6 +502,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700', color: colors.charcoal },
   headerSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   content: { padding: spacing.lg, paddingBottom: 80 },
+
+  // Cat card
   catCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     padding: spacing.md, borderRadius: radius.md,
@@ -334,51 +512,78 @@ const styles = StyleSheet.create({
   },
   catAvatar: {
     width: 48, height: 48, borderRadius: 24,
-    backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, overflow: 'hidden',
   },
+  catAvatarImg: { width: 48, height: 48 },
+  catAvatarInitial: { fontSize: 20, fontWeight: '700' },
+  catNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   catInfo: { flex: 1 },
   catName: { fontSize: 16, color: colors.charcoal },
   catMeta: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  tagDot: { width: 8, height: 8, borderRadius: 4 },
   catActions: { flexDirection: 'row', gap: 6 },
   iconBtn: {
     width: 36, height: 36, borderRadius: radius.sm,
     backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
   },
+
+  // Recipe list
   recipeList: { paddingLeft: 16, marginBottom: 6 },
   recipeCard: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     padding: 12, borderRadius: radius.sm,
-    borderWidth: 1.5, borderColor: colors.border,
+    borderWidth: 1, borderColor: colors.border,
     backgroundColor: '#fff', marginBottom: 6,
   },
-  recipeIcon: { fontSize: 20 },
   recipeInfo: { flex: 1 },
-  recipeName: { fontSize: 14, color: colors.charcoal },
+  recipeName: { fontSize: 14, color: colors.charcoal, marginBottom: 4 },
   recipeNameInactive: { textDecorationLine: 'line-through', color: colors.muted },
-  recipeMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
-  recipeActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  recipeTimeTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignItems: 'center' },
+  timeTag: {
+    paddingHorizontal: 7, paddingVertical: 2,
+    borderRadius: radius.full, borderWidth: 1,
+  },
+  timeTagText: { fontSize: 11 },
+  recipeMeta: { fontSize: 11, color: colors.muted },
+  recipeActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   smallBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  emojiLabel: { fontSize: 12, color: colors.muted, marginBottom: 8, marginTop: 4 },
-  emojiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
-  emojiChip: {
-    width: 44, height: 44, borderRadius: radius.sm,
-    backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: colors.border,
+
+  // Modal fields
+  photoRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  photoBox: { width: 90, height: 90 },
+  photoPreview: { width: 90, height: 90, borderRadius: radius.md },
+  photoPlaceholder: {
+    width: 90, height: 90, borderRadius: radius.md,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.border, borderStyle: 'dashed',
   },
-  emojiChipSel: { backgroundColor: colors.caramel, borderColor: colors.caramel },
-  timeRow: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },
-  timeChip: {
-    flex: 1, paddingVertical: 10, borderRadius: radius.sm,
+  photoHint: { fontSize: 11, marginTop: 2 },
+  colorPickerWrap: { flex: 1 },
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  colorDot: { width: 26, height: 26, borderRadius: 13 },
+  colorDotSel: { borderWidth: 3, borderColor: colors.charcoal },
+  fieldLabel: { fontSize: 12, color: colors.muted, marginBottom: 8, marginTop: 4 },
+  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
+  optionChip: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.full,
     backgroundColor: colors.cream, borderWidth: 1.5, borderColor: colors.border,
-    alignItems: 'center',
   },
-  timeChipSel: { backgroundColor: colors.caramel, borderColor: colors.caramel },
-  timeText: { fontSize: 13, color: colors.brownMid },
-  timeTextSel: { color: '#fff' },
+  optionChipSel: { backgroundColor: colors.caramel, borderColor: colors.caramel },
+  optionText: { fontSize: 13, color: colors.brownMid },
+  optionTextSel: { color: '#fff' },
+  dateRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
+  yearInput: { width: 90, marginBottom: 0 },
+  monthScroll: { flex: 1 },
+  monthRow: { flexDirection: 'row', gap: 6 },
+  dateChip: {
+    paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.full,
+    borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cream,
+  },
+  dateChipText: { fontSize: 12, color: colors.brownMid },
   catChip: {
     paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.full,
     backgroundColor: colors.cream, borderWidth: 1.5, borderColor: colors.border,
   },
-  catChipSel: { backgroundColor: colors.caramel, borderColor: colors.caramel },
   row: { flexDirection: 'row', gap: 10 },
 });

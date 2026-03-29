@@ -24,7 +24,7 @@ import type { RootStackParamList } from '../types';
 
 type RouteProps = RouteProp<RootStackParamList, 'ShareLink'>;
 
-const TIME_LABELS: Record<string, string> = { am: '☀️ 오전', pm: '🌙 오후', all: '📅 종일' };
+const TIME_LABELS: Record<string, string> = { morning: '🌅 아침', lunch: '☀️ 점심', evening: '🌙 저녁' };
 
 export default function ShareScreen() {
   const route = useRoute<RouteProps>();
@@ -114,8 +114,10 @@ export default function ShareScreen() {
   }
 
   const activeRecipes = recipes.filter((r) => r.active);
-  const grouped: Record<string, Recipe[]> = { am: [], pm: [], all: [] };
-  activeRecipes.forEach((r) => grouped[r.time].push(r));
+  const grouped: Record<string, Recipe[]> = { morning: [], lunch: [], evening: [] };
+  activeRecipes.forEach((r) => r.times.forEach((t) => {
+    if (!grouped[t].includes(r)) grouped[t].push(r);
+  }));
 
   const total = activeRecipes.length;
   const done = activeRecipes.filter((r) => {
@@ -171,7 +173,7 @@ export default function ShareScreen() {
         </ScrollView>
 
         {/* Checklist by time group */}
-        {(['am', 'pm', 'all'] as const).map((t) => {
+        {(['morning', 'lunch', 'evening'] as const).map((t) => {
           if (!grouped[t].length) return null;
           return (
             <View key={t} style={styles.section}>
@@ -208,10 +210,9 @@ export default function ShareScreen() {
                         </Text>
                       )}
                     </View>
-                    <Tag
-                      label={t === 'am' ? '오전' : t === 'pm' ? '오후' : '종일'}
-                      type={t}
-                    />
+                    <Text style={{ fontSize: 12, color: colors.muted }}>
+                      {t === 'morning' ? '아침' : t === 'lunch' ? '점심' : '저녁'}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
