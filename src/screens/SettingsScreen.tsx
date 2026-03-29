@@ -106,7 +106,6 @@ export default function SettingsScreen() {
         {settingSection('👤 프로필', <>
           {settingRow('🐱', '표시 이름', user?.displayName ?? '-')}
           {settingRow('📧', '이메일', user?.email ?? '-')}
-          {settingRow('🏠', '가구 이름', household?.name ?? '-')}
         </>)}
 
         {/* Stats */}

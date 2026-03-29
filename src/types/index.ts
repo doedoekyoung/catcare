@@ -7,7 +7,7 @@ export interface Cat {
   name: string;
   emoji?: string;              // deprecated — photoUri 우선
   photoUri?: string;
-  gender?: 'male' | 'female' | 'unknown';
+  gender?: 'male' | 'female' | 'neutered';
   tagColor?: string;           // 홈 탭 & 루틴 카드 색상
   birthYear?: number;
   birthMonth?: number;

@@ -16,9 +16,9 @@ import { colors, spacing, radius, shadow, CAT_TAG_COLORS } from '../utils/theme'
 import type { Cat, Recipe, TimeSlot } from '../types';
 
 const GENDER_OPTIONS = [
-  { value: 'male' as const, label: '수컷 ♂' },
-  { value: 'female' as const, label: '암컷 ♀' },
-  { value: 'unknown' as const, label: '모름' },
+  { value: 'male' as const, label: '남아' },
+  { value: 'female' as const, label: '여아' },
+  { value: 'neutered' as const, label: '중성화' },
 ];
 
 const TIME_OPTIONS: { value: TimeSlot; label: string }[] = [
@@ -44,7 +44,7 @@ export default function CatsScreen() {
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
   const [catName, setCatName] = useState('');
   const [catPhotoUri, setCatPhotoUri] = useState('');
-  const [catGender, setCatGender] = useState<'male' | 'female' | 'unknown' | ''>('');
+  const [catGender, setCatGender] = useState<'male' | 'female' | 'neutered' | ''>('');
   const [catTagColor, setCatTagColor] = useState(CAT_TAG_COLORS[0]);
   const [catBirthYear, setCatBirthYear] = useState('');
   const [catBirthMonth, setCatBirthMonth] = useState<number | null>(null);
@@ -86,7 +86,7 @@ export default function CatsScreen() {
     setEditingCat(cat);
     setCatName(cat.name);
     setCatPhotoUri(cat.photoUri ?? '');
-    setCatGender((cat.gender as any) ?? '');
+    setCatGender((cat.gender as 'male' | 'female' | 'neutered' | '') ?? '');
     setCatTagColor(cat.tagColor ?? CAT_TAG_COLORS[0]);
     setCatBirthYear(cat.birthYear ? String(cat.birthYear) : '');
     setCatBirthMonth(cat.birthMonth ?? null);
@@ -110,19 +110,23 @@ export default function CatsScreen() {
       notes: catNotes || undefined,
     };
 
-    if (editingCat) {
-      await updateCat(household.id, editingCat.id, catData);
-      setCats(cats.map((c) => c.id === editingCat.id ? { ...c, ...catData } : c));
-    } else {
-      const cat = await fsAddCat(household.id, {
-        ...catData,
-        name: catName.trim(),
-        ownerId: user.uid,
-        householdId: household.id,
-      } as Omit<Cat, 'id' | 'createdAt' | 'updatedAt'>);
-      setCats([...cats, cat]);
+    try {
+      if (editingCat) {
+        await updateCat(household.id, editingCat.id, catData);
+        setCats(cats.map((c) => c.id === editingCat.id ? { ...c, ...catData } : c));
+      } else {
+        const cat = await fsAddCat(household.id, {
+          ...catData,
+          name: catName.trim(),
+          ownerId: user.uid,
+          householdId: household.id,
+        } as Omit<Cat, 'id' | 'createdAt' | 'updatedAt'>);
+        setCats([...cats, cat]);
+      }
+      setCatModal(false);
+    } catch (e: any) {
+      Alert.alert('오류', `고양이 저장에 실패했습니다.\n${e?.message ?? ''}`);
     }
-    setCatModal(false);
   };
 
   const handleDeleteCat = (cat: Cat) => {
@@ -148,22 +152,28 @@ export default function CatsScreen() {
 
   const openAddRecipe = (catId: string) => {
     setTargetCatId(catId);
-    setRecipeName(''); setRecipeTimes(['morning']); setRecipeSharedCatIds([catId]);
+    setRecipeName('');
+    setRecipeTimes(['morning']);
+    setRecipeSharedCatIds([catId]);
     setRecipeModal(true);
   };
 
   const handleSaveRecipe = async () => {
     if (!recipeName.trim() || !household || recipeTimes.length === 0) return;
     const catIds = recipeSharedCatIds.length > 0 ? recipeSharedCatIds : [targetCatId];
-    const recipe = await fsAddRecipe(household.id, {
-      name: recipeName.trim(),
-      times: recipeTimes,
-      catIds,
-      active: true,
-      householdId: household.id,
-    });
-    setRecipes([...recipes, recipe]);
-    setRecipeModal(false);
+    try {
+      const recipe = await fsAddRecipe(household.id, {
+        name: recipeName.trim(),
+        times: recipeTimes,
+        catIds,
+        active: true,
+        householdId: household.id,
+      });
+      setRecipes([...recipes, recipe]);
+      setRecipeModal(false);
+    } catch (e: any) {
+      Alert.alert('오류', `루틴 저장에 실패했습니다.\n${e?.message ?? ''}`);
+    }
   };
 
   const handleDeleteRecipe = (recipe: Recipe) => {
@@ -192,10 +202,9 @@ export default function CatsScreen() {
     );
   };
 
-  const toggleSharedCat = (catId: string) => {
-    setRecipeSharedCatIds((prev) =>
-      prev.includes(catId) ? prev.filter((id) => id !== catId) : [...prev, catId]
-    );
+  const selectRecipeCat = (catId: string) => {
+    setRecipeSharedCatIds([catId]);
+    setTargetCatId(catId);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -244,7 +253,7 @@ export default function CatsScreen() {
                     <View style={[styles.tagDot, { backgroundColor: tagColor }]} />
                   </View>
                   <Text style={styles.catMeta}>
-                    {cat.gender === 'male' ? '수컷' : cat.gender === 'female' ? '암컷' : ''}
+                    {cat.gender === 'male' ? '남아' : cat.gender === 'female' ? '여아' : cat.gender === 'neutered' ? '중성화' : ''}
                     {cat.gender && (cat.birthYear || cat.metDate) ? ' · ' : ''}
                     {cat.birthYear ? `${cat.birthYear}년생` : ''}
                     {(!cat.birthYear && cat.metDate) ? `만난 날: ${cat.metDate}` : ''}
@@ -370,32 +379,32 @@ export default function CatsScreen() {
             ))}
           </View>
 
-          {/* 생년월일 */}
-          <Text style={styles.fieldLabel}>생년월일 (선택 가능)</Text>
-          <View style={styles.dateRow}>
-            <Input
-              placeholder="년도"
-              value={catBirthYear}
-              onChangeText={setCatBirthYear}
-              keyboardType="number-pad"
-              maxLength={4}
-              containerStyle={styles.yearInput}
-            />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthScroll}>
+          {/* 생년월일/만난 날 */}
+          <Text style={styles.fieldLabel}>생년월일/만난 날</Text>
+          <Input
+            placeholder="출생년도 (예: 2021)"
+            value={catBirthYear}
+            onChangeText={(v) => { setCatBirthYear(v); if (!v) { setCatBirthMonth(null); setCatBirthDay(null); } }}
+            keyboardType="number-pad"
+            maxLength={4}
+            containerStyle={{ marginBottom: spacing.sm }}
+          />
+          {!!catBirthYear && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
               <View style={styles.monthRow}>
                 {MONTHS.map((m) => (
                   <TouchableOpacity
                     key={m}
                     style={[styles.dateChip, catBirthMonth === m && { backgroundColor: catTagColor, borderColor: catTagColor }]}
-                    onPress={() => setCatBirthMonth(catBirthMonth === m ? null : m)}
+                    onPress={() => { setCatBirthMonth(catBirthMonth === m ? null : m); setCatBirthDay(null); }}
                   >
                     <Text style={[styles.dateChipText, catBirthMonth === m && { color: '#fff' }]}>{m}월</Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </ScrollView>
-          </View>
-          {catBirthMonth && (
+          )}
+          {!!catBirthMonth && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
               <View style={styles.monthRow}>
                 {DAYS.map((d) => (
@@ -465,24 +474,25 @@ export default function CatsScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        {cats.length > 1 && (
-          <>
-            <Text style={styles.fieldLabel}>적용 고양이 *</Text>
-            <View style={styles.optionRow}>
-              {cats.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.catChip, recipeSharedCatIds.includes(c.id) && { backgroundColor: c.tagColor ?? colors.caramel, borderColor: c.tagColor ?? colors.caramel }]}
-                  onPress={() => toggleSharedCat(c.id)}
-                >
-                  <Text style={[{ fontSize: 13, color: colors.brownMid }, recipeSharedCatIds.includes(c.id) && { color: '#fff' }]}>
-                    {c.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
+        <Text style={styles.fieldLabel}>적용 고양이 *</Text>
+        <View style={styles.optionRow}>
+          {cats.map((c) => {
+            const selected = recipeSharedCatIds.includes(c.id);
+            const color = c.tagColor ?? colors.caramel;
+            return (
+              <TouchableOpacity
+                key={c.id}
+                style={[styles.radioRow, selected && { borderColor: color }]}
+                onPress={() => selectRecipeCat(c.id)}
+              >
+                <View style={[styles.radioCircle, selected && { borderColor: color }]}>
+                  {selected && <View style={[styles.radioDot, { backgroundColor: color }]} />}
+                </View>
+                <Text style={[styles.optionText, selected && { color }]}>{c.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         <View style={[styles.row, { marginTop: spacing.md }]}>
           <Button label="취소" variant="secondary" onPress={() => setRecipeModal(false)} style={{ flex: 1 }} />
           <Button label="등록" onPress={handleSaveRecipe} style={{ flex: 1 }} />
@@ -585,5 +595,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.full,
     backgroundColor: colors.cream, borderWidth: 1.5, borderColor: colors.border,
   },
+  radioRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cream,
+  },
+  radioCircle: {
+    width: 18, height: 18, borderRadius: 9,
+    borderWidth: 2, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  radioDot: { width: 9, height: 9, borderRadius: 5 },
   row: { flexDirection: 'row', gap: 10 },
 });
