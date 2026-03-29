@@ -83,13 +83,16 @@ export const selectCompletionRate = (
   catIds: string[]
 ): { done: number; total: number; pct: number } => {
   const active = selectActiveRecipesForCats(recipes, catIds);
-  const total = active.length;
-  if (total === 0) return { done: 0, total: 0, pct: 0 };
-  const done = active.filter((r) => {
+  let total = 0;
+  let done = 0;
+  active.forEach((r) => {
     const catId = r.catIds.find((id) => catIds.includes(id)) ?? r.catIds[0];
-    return checks[`${date}_${r.id}_${catId}`]?.done;
-  }).length;
-  return { done, total, pct: Math.round((done / total) * 100) };
+    r.times.forEach((t) => {
+      total++;
+      if (checks[`${date}_${r.id}_${catId}_${t}`]?.done) done++;
+    });
+  });
+  return { done, total, pct: total === 0 ? 0 : Math.round((done / total) * 100) };
 };
 
 // Weekly completion data for chart (REQ-V5-03)

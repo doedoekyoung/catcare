@@ -1,6 +1,6 @@
 // src/screens/CatsScreen.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image,
 } from 'react-native';
@@ -33,8 +33,83 @@ const TIME_ICONS: Record<TimeSlot, string> = {
   evening: '🌙',
 };
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
-const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+const CURRENT_YEAR = new Date().getFullYear();
+// 0 = blank (미선택)
+const YEARS  = [0, ...Array.from({ length: CURRENT_YEAR - 1989 }, (_, i) => CURRENT_YEAR - i)];
+const MONTHS = [0, ...Array.from({ length: 12 }, (_, i) => i + 1)];
+const DAYS   = [0, ...Array.from({ length: 31 }, (_, i) => i + 1)];
+
+const ITEM_H   = 44;
+const PICKER_H = ITEM_H * 5;
+
+function ScrollPicker({
+  values, selected, onSelect, renderLabel, color,
+}: {
+  values: number[];
+  selected: number | null;
+  onSelect: (v: number | null) => void;
+  renderLabel: (v: number) => string;
+  color: string;
+}) {
+  const ref = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const val = selected ?? 0;
+    const idx = values.indexOf(val);
+    if (idx >= 0) {
+      setTimeout(() => ref.current?.scrollTo({ y: idx * ITEM_H, animated: false }), 80);
+    }
+  }, []);
+
+  return (
+    <View style={{ flex: 1, height: PICKER_H }}>
+      {/* Center highlight */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute', top: ITEM_H * 2, height: ITEM_H, width: '100%',
+          backgroundColor: color + '18', borderRadius: 8,
+          borderTopWidth: 1.5, borderBottomWidth: 1.5, borderColor: color + '70',
+        }}
+      />
+      <ScrollView
+        ref={ref}
+        snapToInterval={ITEM_H}
+        decelerationRate="fast"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingVertical: ITEM_H * 2 }}
+        onMomentumScrollEnd={(e) => {
+          const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_H);
+          const i = Math.max(0, Math.min(idx, values.length - 1));
+          const v = values[i];
+          onSelect(v === 0 ? null : v);
+        }}
+      >
+        {values.map((v) => {
+          const isSel = v === (selected ?? 0);
+          return (
+            <TouchableOpacity
+              key={v}
+              style={{ height: ITEM_H, alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => {
+                const i = values.indexOf(v);
+                ref.current?.scrollTo({ y: i * ITEM_H, animated: true });
+                onSelect(v === 0 ? null : v);
+              }}
+            >
+              <Text style={[
+                { fontSize: 15, color: v === 0 ? colors.border : colors.muted },
+                isSel && v !== 0 && { fontSize: 17, fontWeight: '700', color },
+              ]}>
+                {renderLabel(v)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
 
 export default function CatsScreen() {
   const { cats, recipes, household, user, setCats, setRecipes } = useStore();
@@ -46,14 +121,14 @@ export default function CatsScreen() {
   const [catPhotoUri, setCatPhotoUri] = useState('');
   const [catGender, setCatGender] = useState<'male' | 'female' | 'neutered' | ''>('');
   const [catTagColor, setCatTagColor] = useState(CAT_TAG_COLORS[0]);
-  const [catBirthYear, setCatBirthYear] = useState('');
+  const [catBirthYear, setCatBirthYear] = useState<number | null>(null);
   const [catBirthMonth, setCatBirthMonth] = useState<number | null>(null);
   const [catBirthDay, setCatBirthDay] = useState<number | null>(null);
-  const [activePicker, setActivePicker] = useState<'year' | 'month' | 'day' | null>(null);
   const [catNotes, setCatNotes] = useState('');
 
   // ── Recipe modal state ────────────────────────────────────────────────────────
   const [recipeModal, setRecipeModal] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [targetCatId, setTargetCatId] = useState('');
   const [recipeName, setRecipeName] = useState('');
   const [recipeTimes, setRecipeTimes] = useState<TimeSlot[]>(['morning']);
@@ -64,9 +139,7 @@ export default function CatsScreen() {
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
+      allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
     if (!result.canceled) setCatPhotoUri(result.assets[0].uri);
   };
@@ -77,8 +150,8 @@ export default function CatsScreen() {
     setEditingCat(null);
     setCatName(''); setCatPhotoUri(''); setCatGender('');
     setCatTagColor(CAT_TAG_COLORS[0]);
-    setCatBirthYear(''); setCatBirthMonth(null); setCatBirthDay(null);
-    setActivePicker(null); setCatNotes('');
+    setCatBirthYear(null); setCatBirthMonth(null); setCatBirthDay(null);
+    setCatNotes('');
     setCatModal(true);
   };
 
@@ -88,10 +161,9 @@ export default function CatsScreen() {
     setCatPhotoUri(cat.photoUri ?? '');
     setCatGender((cat.gender as 'male' | 'female' | 'neutered' | '') ?? '');
     setCatTagColor(cat.tagColor ?? CAT_TAG_COLORS[0]);
-    setCatBirthYear(cat.birthYear ? String(cat.birthYear) : '');
+    setCatBirthYear(cat.birthYear ?? null);
     setCatBirthMonth(cat.birthMonth ?? null);
     setCatBirthDay(cat.birthDay ?? null);
-    setActivePicker(null);
     setCatNotes(cat.notes ?? '');
     setCatModal(true);
   };
@@ -103,12 +175,11 @@ export default function CatsScreen() {
       photoUri: catPhotoUri || undefined,
       gender: catGender || undefined,
       tagColor: catTagColor,
-      birthYear: catBirthYear ? Number(catBirthYear) : undefined,
+      birthYear: catBirthYear ?? undefined,
       birthMonth: catBirthMonth ?? undefined,
       birthDay: catBirthDay ?? undefined,
       notes: catNotes || undefined,
     };
-
     try {
       if (editingCat) {
         await updateCat(household.id, editingCat.id, catData);
@@ -140,7 +211,7 @@ export default function CatsScreen() {
             if (!household) return;
             await fsDeleteCat(household.id, cat.id);
             setCats(cats.filter((c) => c.id !== cat.id));
-            setRecipes(recipes.filter((r) => r.catIds.filter((id) => id !== cat.id).length > 0));
+            setRecipes(recipes.filter((r) => r.catIds.some((id) => id !== cat.id)));
           },
         },
       ]
@@ -150,6 +221,7 @@ export default function CatsScreen() {
   // ── Recipe CRUD ───────────────────────────────────────────────────────────────
 
   const openAddRecipe = (catId: string) => {
+    setEditingRecipe(null);
     setTargetCatId(catId);
     setRecipeName('');
     setRecipeTimes(['morning']);
@@ -157,18 +229,35 @@ export default function CatsScreen() {
     setRecipeModal(true);
   };
 
+  const openEditRecipe = (recipe: Recipe) => {
+    setEditingRecipe(recipe);
+    setTargetCatId(recipe.catIds[0]);
+    setRecipeName(recipe.name);
+    setRecipeTimes(recipe.times);
+    setRecipeSharedCatIds(recipe.catIds);
+    setRecipeModal(true);
+  };
+
   const handleSaveRecipe = async () => {
     if (!recipeName.trim() || !household || recipeTimes.length === 0) return;
     const catIds = recipeSharedCatIds.length > 0 ? recipeSharedCatIds : [targetCatId];
     try {
-      const recipe = await fsAddRecipe(household.id, {
-        name: recipeName.trim(),
-        times: recipeTimes,
-        catIds,
-        active: true,
-        householdId: household.id,
-      });
-      setRecipes([...recipes, recipe]);
+      if (editingRecipe) {
+        await updateRecipe(household.id, editingRecipe.id, {
+          name: recipeName.trim(), times: recipeTimes, catIds,
+        });
+        setRecipes(recipes.map((r) =>
+          r.id === editingRecipe.id
+            ? { ...r, name: recipeName.trim(), times: recipeTimes, catIds }
+            : r
+        ));
+      } else {
+        const recipe = await fsAddRecipe(household.id, {
+          name: recipeName.trim(), times: recipeTimes, catIds,
+          active: true, householdId: household.id,
+        });
+        setRecipes([...recipes, recipe]);
+      }
       setRecipeModal(false);
     } catch (e: any) {
       Alert.alert('오류', `루틴 저장에 실패했습니다.\n${e?.message ?? ''}`);
@@ -201,9 +290,12 @@ export default function CatsScreen() {
     );
   };
 
-  const selectRecipeCat = (catId: string) => {
-    setRecipeSharedCatIds([catId]);
-    setTargetCatId(catId);
+  const toggleSharedCat = (catId: string) => {
+    setRecipeSharedCatIds((prev) =>
+      prev.includes(catId)
+        ? prev.length > 1 ? prev.filter((id) => id !== catId) : prev
+        : [...prev, catId]
+    );
   };
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -253,10 +345,9 @@ export default function CatsScreen() {
                   </View>
                   <Text style={styles.catMeta}>
                     {cat.gender === 'male' ? '남아' : cat.gender === 'female' ? '여아' : cat.gender === 'neutered' ? '중성화' : ''}
-                    {cat.gender && (cat.birthYear || cat.metDate) ? ' · ' : ''}
+                    {cat.gender && cat.birthYear ? ' · ' : ''}
                     {cat.birthYear ? `${cat.birthYear}년생` : ''}
-                    {(!cat.birthYear && cat.metDate) ? `만난 날: ${cat.metDate}` : ''}
-                    {!cat.gender && !cat.birthYear && !cat.metDate ? `루틴 ${catRecipes.length}개` : ''}
+                    {!cat.gender && !cat.birthYear ? `루틴 ${catRecipes.length}개` : ''}
                   </Text>
                 </View>
                 <View style={styles.catActions}>
@@ -296,6 +387,9 @@ export default function CatsScreen() {
                       </View>
                     </View>
                     <View style={styles.recipeActions}>
+                      <TouchableOpacity onPress={() => openEditRecipe(r)} style={styles.smallBtn}>
+                        <Text style={{ fontSize: 14 }}>✏️</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity onPress={() => handleToggleActive(r)} style={styles.smallBtn}>
                         <Text style={{ fontSize: 16 }}>{r.active ? '✅' : '⏸️'}</Text>
                       </TouchableOpacity>
@@ -325,7 +419,7 @@ export default function CatsScreen() {
         title={editingCat ? '고양이 수정' : '고양이 등록'}
       >
         <ScrollView showsVerticalScrollIndicator={false}>
-          {/* 사진 */}
+          {/* 사진 + 태그 컬러 */}
           <View style={styles.photoRow}>
             <TouchableOpacity style={styles.photoBox} onPress={pickImage}>
               {catPhotoUri ? (
@@ -337,8 +431,6 @@ export default function CatsScreen() {
                 </View>
               )}
             </TouchableOpacity>
-
-            {/* 태그 컬러 */}
             <View style={styles.colorPickerWrap}>
               <Text style={styles.fieldLabel}>태그 색상</Text>
               <View style={styles.colorRow}>
@@ -378,84 +470,46 @@ export default function CatsScreen() {
             ))}
           </View>
 
-          {/* 생년월일/만난 날 */}
+          {/* 생년월일 — 3단 스크롤 피커 */}
           <Text style={styles.fieldLabel}>생년월일/만난 날</Text>
-          <View style={[styles.optionRow, { marginBottom: activePicker ? 8 : spacing.md }]}>
-            {/* 년 버튼 */}
-            <TouchableOpacity
-              style={[styles.dateBtn, catBirthYear ? { borderColor: catTagColor } : null, activePicker === 'year' && { backgroundColor: catTagColor, borderColor: catTagColor }]}
-              onPress={() => setActivePicker(activePicker === 'year' ? null : 'year')}
-            >
-              <Text style={[styles.dateBtnText, activePicker === 'year' && { color: '#fff' }, (catBirthYear && activePicker !== 'year') && { color: catTagColor }]}>
-                {catBirthYear ? `${catBirthYear}년` : '년'}
-              </Text>
-            </TouchableOpacity>
-            {/* 월 버튼 */}
-            <TouchableOpacity
-              style={[styles.dateBtn, !catBirthYear && styles.dateBtnDisabled, catBirthMonth ? { borderColor: catTagColor } : null, activePicker === 'month' && { backgroundColor: catTagColor, borderColor: catTagColor }]}
-              onPress={() => { if (catBirthYear) setActivePicker(activePicker === 'month' ? null : 'month'); }}
-              disabled={!catBirthYear}
-            >
-              <Text style={[styles.dateBtnText, !catBirthYear && { color: colors.muted }, activePicker === 'month' && { color: '#fff' }, (catBirthMonth && activePicker !== 'month') && { color: catTagColor }]}>
-                {catBirthMonth ? `${catBirthMonth}월` : '월'}
-              </Text>
-            </TouchableOpacity>
-            {/* 일 버튼 */}
-            <TouchableOpacity
-              style={[styles.dateBtn, !catBirthMonth && styles.dateBtnDisabled, catBirthDay ? { borderColor: catTagColor } : null, activePicker === 'day' && { backgroundColor: catTagColor, borderColor: catTagColor }]}
-              onPress={() => { if (catBirthMonth) setActivePicker(activePicker === 'day' ? null : 'day'); }}
-              disabled={!catBirthMonth}
-            >
-              <Text style={[styles.dateBtnText, !catBirthMonth && { color: colors.muted }, activePicker === 'day' && { color: '#fff' }, (catBirthDay && activePicker !== 'day') && { color: catTagColor }]}>
-                {catBirthDay ? `${catBirthDay}일` : '일'}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.pickerRow}>
+            <View style={styles.pickerCol}>
+              <Text style={styles.pickerLabel}>년</Text>
+              <View style={styles.pickerContainer}>
+                <ScrollPicker
+                  values={YEARS}
+                  selected={catBirthYear}
+                  onSelect={(v) => { setCatBirthYear(v); if (!v) { setCatBirthMonth(null); setCatBirthDay(null); } }}
+                  renderLabel={(v) => v === 0 ? '-' : `${v}`}
+                  color={catTagColor}
+                />
+              </View>
+            </View>
+            <View style={styles.pickerCol}>
+              <Text style={styles.pickerLabel}>월</Text>
+              <View style={[styles.pickerContainer, !catBirthYear && styles.pickerDisabled]}>
+                <ScrollPicker
+                  values={MONTHS}
+                  selected={catBirthMonth}
+                  onSelect={(v) => { if (catBirthYear) { setCatBirthMonth(v); if (!v) setCatBirthDay(null); } }}
+                  renderLabel={(v) => v === 0 ? '-' : `${v}월`}
+                  color={catTagColor}
+                />
+              </View>
+            </View>
+            <View style={styles.pickerCol}>
+              <Text style={styles.pickerLabel}>일</Text>
+              <View style={[styles.pickerContainer, !catBirthMonth && styles.pickerDisabled]}>
+                <ScrollPicker
+                  values={DAYS}
+                  selected={catBirthDay}
+                  onSelect={(v) => { if (catBirthMonth) setCatBirthDay(v); }}
+                  renderLabel={(v) => v === 0 ? '-' : `${v}일`}
+                  color={catTagColor}
+                />
+              </View>
+            </View>
           </View>
-
-          {/* 년도 입력 */}
-          {activePicker === 'year' && (
-            <Input
-              placeholder="출생년도 (예: 2021)"
-              value={catBirthYear}
-              onChangeText={(v) => { setCatBirthYear(v); if (!v) { setCatBirthMonth(null); setCatBirthDay(null); } }}
-              keyboardType="number-pad"
-              maxLength={4}
-              containerStyle={{ marginBottom: spacing.sm }}
-              autoFocus
-            />
-          )}
-          {/* 월 선택 */}
-          {activePicker === 'month' && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
-              <View style={styles.monthRow}>
-                {MONTHS.map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[styles.dateChip, catBirthMonth === m && { backgroundColor: catTagColor, borderColor: catTagColor }]}
-                    onPress={() => { setCatBirthMonth(catBirthMonth === m ? null : m); if (catBirthMonth === m) setCatBirthDay(null); }}
-                  >
-                    <Text style={[styles.dateChipText, catBirthMonth === m && { color: '#fff' }]}>{m}월</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          )}
-          {/* 일 선택 */}
-          {activePicker === 'day' && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
-              <View style={styles.monthRow}>
-                {DAYS.map((d) => (
-                  <TouchableOpacity
-                    key={d}
-                    style={[styles.dateChip, catBirthDay === d && { backgroundColor: catTagColor, borderColor: catTagColor }]}
-                    onPress={() => setCatBirthDay(catBirthDay === d ? null : d)}
-                  >
-                    <Text style={[styles.dateChipText, catBirthDay === d && { color: '#fff' }]}>{d}일</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          )}
 
           {/* 특이사항 */}
           <Input
@@ -475,11 +529,11 @@ export default function CatsScreen() {
         </ScrollView>
       </BottomSheet>
 
-      {/* ── Add Recipe Modal ── */}
+      {/* ── Add/Edit Recipe Modal ── */}
       <BottomSheet
         visible={recipeModal}
         onClose={() => setRecipeModal(false)}
-        title="루틴 항목 등록"
+        title={editingRecipe ? '루틴 수정' : '루틴 항목 등록'}
       >
         <Input
           label="항목명 *"
@@ -502,7 +556,7 @@ export default function CatsScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={styles.fieldLabel}>적용 고양이 *</Text>
+        <Text style={styles.fieldLabel}>적용 고양이 * (복수 선택 가능)</Text>
         <View style={styles.optionRow}>
           {cats.map((c) => {
             const selected = recipeSharedCatIds.includes(c.id);
@@ -510,20 +564,23 @@ export default function CatsScreen() {
             return (
               <TouchableOpacity
                 key={c.id}
-                style={[styles.radioRow, selected && { borderColor: color }]}
-                onPress={() => selectRecipeCat(c.id)}
+                style={[
+                  styles.checkRow,
+                  selected && { borderColor: color, backgroundColor: color + '15' },
+                ]}
+                onPress={() => toggleSharedCat(c.id)}
               >
-                <View style={[styles.radioCircle, selected && { borderColor: color }]}>
-                  {selected && <View style={[styles.radioDot, { backgroundColor: color }]} />}
+                <View style={[styles.checkBox, selected && { borderColor: color, backgroundColor: color }]}>
+                  {selected && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>✓</Text>}
                 </View>
-                <Text style={[styles.optionText, selected && { color }]}>{c.name}</Text>
+                <Text style={[styles.optionText, selected && { color, fontWeight: '600' }]}>{c.name}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
         <View style={[styles.row, { marginTop: spacing.md }]}>
           <Button label="취소" variant="secondary" onPress={() => setRecipeModal(false)} style={{ flex: 1 }} />
-          <Button label="등록" onPress={handleSaveRecipe} style={{ flex: 1 }} />
+          <Button label={editingRecipe ? '수정' : '등록'} onPress={handleSaveRecipe} style={{ flex: 1 }} />
         </View>
       </BottomSheet>
     </SafeAreaView>
@@ -610,36 +667,27 @@ const styles = StyleSheet.create({
   optionChipSel: { backgroundColor: colors.caramel, borderColor: colors.caramel },
   optionText: { fontSize: 13, color: colors.brownMid },
   optionTextSel: { color: '#fff' },
-  dateRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
-  yearInput: { width: 90, marginBottom: 0 },
-  monthScroll: { flex: 1 },
-  monthRow: { flexDirection: 'row', gap: 6 },
-  dateBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: radius.md,
-    borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cream,
-    alignItems: 'center',
-  },
-  dateBtnDisabled: { opacity: 0.4 },
-  dateBtnText: { fontSize: 14, color: colors.brownMid, fontWeight: '500' },
-  dateChip: {
-    paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.full,
+
+  // Scroll picker
+  pickerRow: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },
+  pickerCol: { flex: 1, alignItems: 'center' },
+  pickerLabel: { fontSize: 11, color: colors.muted, marginBottom: 4 },
+  pickerContainer: {
+    width: '100%', borderRadius: radius.md, overflow: 'hidden',
     borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cream,
   },
-  dateChipText: { fontSize: 12, color: colors.brownMid },
-  catChip: {
-    paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.full,
-    backgroundColor: colors.cream, borderWidth: 1.5, borderColor: colors.border,
-  },
-  radioRow: {
+  pickerDisabled: { opacity: 0.35 },
+
+  // Recipe cat checkbox
+  checkRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md,
     borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cream,
   },
-  radioCircle: {
-    width: 18, height: 18, borderRadius: 9,
+  checkBox: {
+    width: 20, height: 20, borderRadius: 5,
     borderWidth: 2, borderColor: colors.border,
     alignItems: 'center', justifyContent: 'center',
   },
-  radioDot: { width: 9, height: 9, borderRadius: 5 },
   row: { flexDirection: 'row', gap: 10 },
 });

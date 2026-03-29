@@ -71,11 +71,11 @@ export default function ShareScreen() {
   }, [token]);
 
   const handleToggleCheck = useCallback(
-    async (recipe: Recipe, catId: string) => {
+    async (recipe: Recipe, catId: string, timeSlot: string) => {
       if (!household) return;
       const { data: { session } } = await supabase.auth.getSession();
       const uid = session?.user?.id ?? 'guest';
-      const key = `${today}_${recipe.id}_${catId}`;
+      const key = `${today}_${recipe.id}_${catId}_${timeSlot}`;
       const current = checks[key];
       const newDone = !(current?.done ?? false);
       const record: CheckRecord = {
@@ -119,11 +119,14 @@ export default function ShareScreen() {
     if (!grouped[t].includes(r)) grouped[t].push(r);
   }));
 
-  const total = activeRecipes.length;
-  const done = activeRecipes.filter((r) => {
+  let total = 0; let done = 0;
+  activeRecipes.forEach((r) => {
     const catId = r.catIds[0];
-    return checks[`${today}_${r.id}_${catId}`]?.done;
-  }).length;
+    r.times.forEach((t) => {
+      total++;
+      if (checks[`${today}_${r.id}_${catId}_${t}`]?.done) done++;
+    });
+  });
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
@@ -184,7 +187,7 @@ export default function ShareScreen() {
               {grouped[t].map((recipe) => {
                 const catId = recipe.catIds[0];
                 const cat = cats.find((c) => c.id === catId);
-                const key = `${today}_${recipe.id}_${catId}`;
+                const key = `${today}_${recipe.id}_${catId}_${t}`;
                 const isDone = checks[key]?.done ?? false;
                 const sharedNames = recipe.catIds
                   .map((id) => cats.find((c) => c.id === id)?.name)
@@ -193,7 +196,7 @@ export default function ShareScreen() {
                   <TouchableOpacity
                     key={recipe.id}
                     style={[styles.checkItem, isDone && styles.checkItemDone]}
-                    onPress={() => handleToggleCheck(recipe, catId)}
+                    onPress={() => handleToggleCheck(recipe, catId, t)}
                     activeOpacity={0.7}
                   >
                     <View style={[styles.checkBox, isDone && styles.checkBoxDone]}>

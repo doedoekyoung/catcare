@@ -45,10 +45,10 @@ export default function HomeScreen() {
   });
 
   const handleToggleCheck = useCallback(
-    async (recipe: Recipe) => {
+    async (recipe: Recipe, timeSlot: TimeSlot) => {
       if (!household || !user) return;
       const catId = recipe.catIds.find((id) => selectedCatIds.includes(id)) ?? recipe.catIds[0];
-      const key = `${today}_${recipe.id}_${catId}`;
+      const key = `${today}_${recipe.id}_${catId}_${timeSlot}`;
       const current = checks[key];
       const newDone = !(current?.done ?? false);
       const record: CheckRecord = {
@@ -177,7 +177,7 @@ export default function HomeScreen() {
               <SectionTitle title={TIME_LABELS[t]} />
               {grouped[t].map((recipe) => {
                 const catId = recipe.catIds.find((id) => selectedCatIds.includes(id)) ?? recipe.catIds[0];
-                const key = `${today}_${recipe.id}_${catId}`;
+                const key = `${today}_${recipe.id}_${catId}_${t}`;
                 const isDone = checks[key]?.done ?? false;
                 const cat = cats.find((c) => c.id === catId);
                 const tagColor = cat?.tagColor ?? colors.caramel;
@@ -194,7 +194,7 @@ export default function HomeScreen() {
                         : { backgroundColor: '#fff', borderColor: tagColor + '50' },
                       { borderLeftWidth: 3, borderLeftColor: tagColor },
                     ]}
-                    onPress={() => handleToggleCheck(recipe)}
+                    onPress={() => handleToggleCheck(recipe, t)}
                     activeOpacity={0.7}
                   >
                     <View style={[styles.checkBox, isDone && { backgroundColor: tagColor, borderColor: tagColor }]}>
@@ -222,20 +222,24 @@ export default function HomeScreen() {
           </Card>
         )}
 
-        {/* Today log */}
-        <SectionTitle title="📓 오늘의 메모" style={{ marginTop: 8 }} />
-        {todayLog ? (
-          <Card>
-            <Text style={styles.logText}>{todayLog.text}</Text>
-            <Button label="✏️ 수정" variant="ghost" size="sm" onPress={openLogModal} />
-          </Card>
-        ) : (
-          <Card style={{ backgroundColor: colors.cream }}>
-            <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 10, textAlign: 'center' }}>
-              오늘의 특이사항을 기록해보세요
-            </Text>
-            <Button label="✏️ 메모 추가" variant="secondary" size="sm" onPress={openLogModal} />
-          </Card>
+        {/* Today log — 고양이 등록 후에만 표시 */}
+        {cats.length > 0 && (
+          <>
+            <SectionTitle title="📓 오늘의 메모" style={{ marginTop: 8 }} />
+            {todayLog ? (
+              <Card>
+                <Text style={styles.logText}>{todayLog.text}</Text>
+                <Button label="✏️ 수정" variant="ghost" size="sm" onPress={openLogModal} />
+              </Card>
+            ) : (
+              <Card style={{ backgroundColor: colors.cream }}>
+                <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 10, textAlign: 'center' }}>
+                  오늘의 특이사항을 기록해보세요
+                </Text>
+                <Button label="✏️ 메모 추가" variant="secondary" size="sm" onPress={openLogModal} />
+              </Card>
+            )}
+          </>
         )}
       </ScrollView>
 
