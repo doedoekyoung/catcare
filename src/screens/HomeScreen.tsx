@@ -69,16 +69,20 @@ export default function HomeScreen() {
     if (!logText.trim() || !household || !user) return;
     const existing = logs.find((l) => l.date === today);
     const log = {
-      id: existing?.id ?? `${today}_${user.uid}`,
+      id: existing?.id ?? crypto.randomUUID(),
       date: today, text: logText.trim(),
       householdId: household.id, authorId: user.uid,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    await upsertLog(household.id, log);
-    setLogs(logs.map((l) => l.id === log.id ? log : l).concat(existing ? [] : [log]));
-    setLogModalVisible(false);
-    setLogText('');
+    try {
+      await upsertLog(household.id, log);
+      setLogs(logs.map((l) => l.id === log.id ? log : l).concat(existing ? [] : [log]));
+      setLogModalVisible(false);
+      setLogText('');
+    } catch (e: any) {
+      if (typeof window !== 'undefined') window.alert(`저장 실패: ${e?.message ?? ''}`);
+    }
   };
 
   const openLogModal = () => {
