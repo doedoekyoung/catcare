@@ -1,6 +1,6 @@
 // src/navigation/AppNavigator.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -76,6 +76,7 @@ export default function AppNavigator() {
   } = useStore();
 
   const [authLoaded, setAuthLoaded] = useState(false);
+  const dataUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     // 환경변수 누락 등으로 auth 콜백이 영원히 안 올 경우 폴백
@@ -83,6 +84,13 @@ export default function AppNavigator() {
 
     const unsubAuth = subscribeToAuthState(async (u) => {
       clearTimeout(fallback);
+
+      // 이전 Realtime 구독 정리 (중복 채널 방지)
+      if (dataUnsubRef.current) {
+        dataUnsubRef.current();
+        dataUnsubRef.current = null;
+      }
+
       setUser(u);
       setAuthLoaded(true);
 
@@ -93,7 +101,6 @@ export default function AppNavigator() {
           if (hh) setHousehold(hh);
 
           const today = toDateKey();
-          // Subscribe to real-time collections
           const unsub1 = subscribeToCats(u.householdId, setCats);
           const unsub2 = subscribeToRecipes(u.householdId, setRecipes);
           const unsub3 = subscribeToChecks(u.householdId, today, (checks) => {
@@ -103,13 +110,21 @@ export default function AppNavigator() {
           });
           const unsub4 = subscribeToLogs(u.householdId, setLogs);
 
-          return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
+          dataUnsubRef.current = () => { unsub1(); unsub2(); unsub3(); unsub4(); };
         } finally {
           setIsLoading(false);
         }
       }
     });
-    return () => { clearTimeout(fallback); unsubAuth(); };
+
+    return () => {
+      clearTimeout(fallback);
+      unsubAuth();
+      if (dataUnsubRef.current) {
+        dataUnsubRef.current();
+        dataUnsubRef.current = null;
+      }
+    };
   }, []);
 
   if (!authLoaded) {
