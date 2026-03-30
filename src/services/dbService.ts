@@ -150,7 +150,7 @@ export async function addMemberToHousehold(
   if (uErr) throw uErr;
 }
 
-// 집사 제거: household.member_ids에서 삭제 + 상대방 household_id를 null로 초기화
+// 집사 제거: household.member_ids에서 삭제 + 상대방 household_id를 본인 소유 household로 복원
 export async function removeMemberFromHousehold(
   householdId: string,
   memberUid: string,
@@ -162,9 +162,16 @@ export async function removeMemberFromHousehold(
     .eq('id', householdId);
   if (hErr) throw hErr;
 
+  // 제거된 집사의 household_id를 본인이 owner인 household로 복원
+  const { data: ownHousehold } = await supabase
+    .from(TABLES.HOUSEHOLDS)
+    .select('id')
+    .eq('owner_id', memberUid)
+    .single();
+
   const { error: uErr } = await supabase
     .from(TABLES.USERS)
-    .update({ household_id: null })
+    .update({ household_id: ownHousehold?.id ?? null })
     .eq('uid', memberUid);
   if (uErr) throw uErr;
 }

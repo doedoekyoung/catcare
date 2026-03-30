@@ -98,6 +98,7 @@ export default function SettingsScreen() {
           const newMemberIds = household.memberIds.filter((id) => id !== member.uid);
           setHousehold({ ...household, memberIds: newMemberIds });
           setMembers((prev) => prev.filter((m) => m.uid !== member.uid));
+          webAlert('완료', `${member.displayName}님이 제거되었습니다.\n상대방은 새로고침 후 반영됩니다.`);
         } catch (e: any) {
           webAlert('오류', e?.message ?? '제거 중 오류가 발생했어요.');
         }
