@@ -10,7 +10,7 @@ import { useStore, selectWeeklyStats } from '../store/useStore';
 import { Button, Card, SectionTitle, EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { formatDisplayDate, getLast30Days, toDateKey } from '../utils/date';
-import { exportAsPDF, exportAsCSV } from '../services/exportService';
+import { exportAsPDF } from '../services/exportService';
 import { getChecksForDateRange, getLogsForDateRange } from '../services/dbService';
 
 const TAG_OPTIONS = [
@@ -210,23 +210,14 @@ export default function RecordsScreen() {
             </View>
           </ScrollView>
 
-          {/* Export buttons */}
-          <View style={[styles.row, { marginBottom: spacing.lg }]}>
+          {/* Export button */}
+          <View style={{ marginBottom: spacing.lg }}>
             <Button
-              label="📄 PDF 내보내기"
+              label="📄 리포트 내보내기 (PDF)"
               variant="secondary"
               size="sm"
               loading={exportLoading}
               onPress={() => handleExport('pdf')}
-              style={{ flex: 1 }}
-            />
-            <Button
-              label="📊 CSV 내보내기"
-              variant="secondary"
-              size="sm"
-              loading={exportLoading}
-              onPress={() => handleExport('csv')}
-              style={{ flex: 1 }}
             />
           </View>
 

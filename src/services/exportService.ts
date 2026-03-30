@@ -1,8 +1,7 @@
 // src/services/exportService.ts
 // REQ-V5-05: Export checklist + logs as PDF or CSV
 
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Cat, Recipe, CheckRecord, DailyLog } from '../types';
@@ -21,7 +20,7 @@ interface ExportOptions {
 
 export async function exportAsCSV(opts: ExportOptions): Promise<void> {
   const rows: string[] = [
-    '날짜,고양이,루틴항목,시간대,완료여부,완료시각,메모',
+    '날짜,고양이,루틴항목,완료여부,완료시각,메모',
   ];
 
   opts.checks.forEach((c) => {
@@ -32,7 +31,6 @@ export async function exportAsCSV(opts: ExportOptions): Promise<void> {
         c.date,
         cat?.name ?? '',
         recipe?.name ?? '',
-        recipe?.time ?? '',
         c.done ? '완료' : '미완료',
         c.doneAt ? format(new Date(c.doneAt), 'HH:mm', { locale: ko }) : '',
         c.memo ?? '',
@@ -42,7 +40,6 @@ export async function exportAsCSV(opts: ExportOptions): Promise<void> {
     );
   });
 
-  // Append daily logs
   rows.push('');
   rows.push('날짜,메모,사진여부');
   opts.logs.forEach((l) => {
@@ -53,14 +50,26 @@ export async function exportAsCSV(opts: ExportOptions): Promise<void> {
     );
   });
 
-  const csv = '\uFEFF' + rows.join('\n'); // BOM for Excel Korean encoding
+  const csv = '\uFEFF' + rows.join('\n');
   const fileName = `CatCare_${opts.startDate}_${opts.endDate}.csv`;
-  const path = `${FileSystem.cacheDirectory}${fileName}`;
 
+  if (Platform.OS === 'web') {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  const FileSystem = await import('expo-file-system');
+  const Sharing = await import('expo-sharing');
+  const path = `${FileSystem.cacheDirectory}${fileName}`;
   await FileSystem.writeAsStringAsync(path, csv, {
     encoding: FileSystem.EncodingType.UTF8,
   });
-
   await Sharing.shareAsync(path, {
     mimeType: 'text/csv',
     dialogTitle: 'CatCare 기록 내보내기',
@@ -73,12 +82,24 @@ export async function exportAsCSV(opts: ExportOptions): Promise<void> {
 export async function exportAsPDF(opts: ExportOptions): Promise<void> {
   const html = buildReportHTML(opts);
   const fileName = `CatCare_Report_${opts.startDate}_${opts.endDate}.html`;
-  const path = `${FileSystem.cacheDirectory}${fileName}`;
 
+  if (Platform.OS === 'web') {
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      // 약간 딜레이 후 인쇄 다이얼로그 (PDF로 저장 가능)
+      setTimeout(() => win.print(), 500);
+    }
+    return;
+  }
+
+  const FileSystem = await import('expo-file-system');
+  const Sharing = await import('expo-sharing');
+  const path = `${FileSystem.cacheDirectory}${fileName}`;
   await FileSystem.writeAsStringAsync(path, html, {
     encoding: FileSystem.EncodingType.UTF8,
   });
-
   await Sharing.shareAsync(path, {
     mimeType: 'text/html',
     dialogTitle: 'CatCare 건강 리포트 공유',
@@ -86,48 +107,32 @@ export async function exportAsPDF(opts: ExportOptions): Promise<void> {
 }
 
 function buildReportHTML(opts: ExportOptions): string {
-  const { cats, recipes, checks, logs, startDate, endDate, householdName } =
-    opts;
+  const { cats, recipes, checks, logs, startDate, endDate, householdName } = opts;
 
   const dateRange = `${format(new Date(startDate), 'yyyy년 M월 d일')} ~ ${format(
-    new Date(endDate),
-    'yyyy년 M월 d일'
+    new Date(endDate), 'yyyy년 M월 d일'
   )}`;
 
-  // Group checks by cat
   const catSections = cats
     .map((cat) => {
-      const catChecks = checks.filter(
-        (c) => c.catId === cat.id && c.done
-      );
+      const catChecks = checks.filter((c) => c.catId === cat.id && c.done);
       const catRecipes = recipes.filter((r) => r.catIds.includes(cat.id));
-      const completionRate =
-        checks.filter((c) => c.catId === cat.id).length > 0
-          ? Math.round(
-              (catChecks.length /
-                checks.filter((c) => c.catId === cat.id).length) *
-                100
-            )
-          : 0;
+      const total = checks.filter((c) => c.catId === cat.id).length;
+      const completionRate = total > 0 ? Math.round((catChecks.length / total) * 100) : 0;
 
       return `
       <section class="cat-section">
-        <h2>${cat.emoji} ${cat.name}</h2>
+        <h2>${cat.name}</h2>
         <p class="meta">루틴 항목 ${catRecipes.length}개 · 완료율 ${completionRate}%</p>
         <table>
           <thead><tr><th>날짜</th><th>루틴</th><th>완료</th><th>메모</th></tr></thead>
           <tbody>
-            ${catChecks
-              .slice(0, 100)
-              .map(
-                (c) => `<tr>
-                <td>${c.date}</td>
-                <td>${recipes.find((r) => r.id === c.recipeId)?.name ?? '-'}</td>
-                <td>${c.done ? '✓' : '-'}</td>
-                <td>${c.memo ?? ''}</td>
-              </tr>`
-              )
-              .join('')}
+            ${catChecks.slice(0, 100).map((c) => `<tr>
+              <td>${c.date}</td>
+              <td>${recipes.find((r) => r.id === c.recipeId)?.name ?? '-'}</td>
+              <td>✓</td>
+              <td>${c.memo ?? ''}</td>
+            </tr>`).join('')}
           </tbody>
         </table>
       </section>`;
@@ -135,12 +140,10 @@ function buildReportHTML(opts: ExportOptions): string {
     .join('');
 
   const logSection = logs
-    .map(
-      (l) => `<div class="log-row">
+    .map((l) => `<div class="log-row">
       <span class="log-date">${l.date}</span>
       <p>${l.text}</p>
-    </div>`
-    )
+    </div>`)
     .join('');
 
   return `<!DOCTYPE html>
@@ -148,7 +151,7 @@ function buildReportHTML(opts: ExportOptions): string {
 <meta charset="UTF-8">
 <title>CatCare 건강 리포트</title>
 <style>
-  body { font-family: 'Apple SD Gothic Neo', sans-serif; color: #2C2420; padding: 32px; max-width: 800px; margin: auto; }
+  body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; color: #2C2420; padding: 32px; max-width: 800px; margin: auto; }
   h1 { color: #C4956A; } h2 { color: #6B4F3A; border-bottom: 2px solid #E8DDD0; padding-bottom: 6px; }
   .meta { color: #8C7B70; font-size: 13px; }
   table { width: 100%; border-collapse: collapse; margin: 12px 0 24px; font-size: 13px; }
@@ -156,6 +159,7 @@ function buildReportHTML(opts: ExportOptions): string {
   td { padding: 7px 8px; border-bottom: 1px solid #E8DDD0; }
   .log-row { padding: 10px 0; border-bottom: 1px solid #E8DDD0; }
   .log-date { font-weight: bold; color: #C4956A; display: block; font-size: 12px; }
+  @media print { body { padding: 0; } }
 </style>
 </head><body>
 <h1>🐱 CatCare 건강 리포트</h1>
