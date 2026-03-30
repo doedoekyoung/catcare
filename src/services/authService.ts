@@ -46,8 +46,12 @@ export function subscribeToAuthState(
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
     async (_event, session) => {
       if (!session?.user) { cb(null); return; }
-      const user = await getUserById(session.user.id);
-      cb(user);
+      try {
+        const user = await getUserById(session.user.id);
+        cb(user ?? null);
+      } catch {
+        cb(null);
+      }
     }
   );
   return () => subscription.unsubscribe();

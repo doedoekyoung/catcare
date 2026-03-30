@@ -78,7 +78,11 @@ export default function AppNavigator() {
   const [authLoaded, setAuthLoaded] = useState(false);
 
   useEffect(() => {
+    // 환경변수 누락 등으로 auth 콜백이 영원히 안 올 경우 폴백
+    const fallback = setTimeout(() => setAuthLoaded(true), 6000);
+
     const unsubAuth = subscribeToAuthState(async (u) => {
+      clearTimeout(fallback);
       setUser(u);
       setAuthLoaded(true);
 
@@ -105,7 +109,7 @@ export default function AppNavigator() {
         }
       }
     });
-    return unsubAuth;
+    return () => { clearTimeout(fallback); unsubAuth(); };
   }, []);
 
   if (!authLoaded) {
