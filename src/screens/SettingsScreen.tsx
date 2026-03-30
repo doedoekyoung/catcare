@@ -1,9 +1,10 @@
 // src/screens/SettingsScreen.tsx
 // REQ-V1-03~05, V5-01, V5-06
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share, Platform,
+  Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 
 function webConfirm(title: string, message: string, onConfirm: () => void, confirmLabel = '확인') {
@@ -27,13 +28,83 @@ function webAlert(title: string, message?: string) {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { signOut } from '../services/authService';
-import { regenerateShareToken } from '../services/dbService';
+import {
+  regenerateShareToken,
+  getUserByEmail,
+  addMemberToHousehold,
+  removeMemberFromHousehold,
+  getUsersByIds,
+} from '../services/dbService';
+import type { User } from '../types';
 import { Button, Card } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 
 export default function SettingsScreen() {
   const { user, household, cats, recipes, setUser, setHousehold } = useStore();
   const [shareLoading, setShareLoading] = useState(false);
+
+  // 집사 관리 상태
+  const [members, setMembers] = useState<User[]>([]);
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [addLoading, setAddLoading] = useState(false);
+
+  const isOwner = user?.uid === household?.ownerId;
+
+  useEffect(() => {
+    if (!household?.memberIds?.length) return;
+    getUsersByIds(household.memberIds).then(setMembers).catch(() => {});
+  }, [household?.memberIds]);
+
+  const handleAddMember = async () => {
+    if (!household || !emailInput.trim()) return;
+    if (emailInput.trim().toLowerCase() === user?.email?.toLowerCase()) {
+      webAlert('오류', '본인 이메일은 추가할 수 없어요.');
+      return;
+    }
+    setAddLoading(true);
+    try {
+      const found = await getUserByEmail(emailInput.trim());
+      if (!found) {
+        webAlert('사용자 없음', '해당 이메일로 가입된 계정을 찾을 수 없어요.');
+        return;
+      }
+      if (household.memberIds.includes(found.uid)) {
+        webAlert('이미 추가됨', '이미 이 가구의 집사예요.');
+        return;
+      }
+      await addMemberToHousehold(household.id, found.uid, household.memberIds);
+      const newMemberIds = [...household.memberIds, found.uid];
+      setHousehold({ ...household, memberIds: newMemberIds });
+      setMembers((prev) => [...prev, found]);
+      setEmailInput('');
+      setAddModalVisible(false);
+      webAlert('완료', `${found.displayName}님이 집사로 추가되었습니다.`);
+    } catch (e: any) {
+      webAlert('오류', e?.message ?? '추가 중 오류가 발생했어요.');
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const handleRemoveMember = (member: User) => {
+    if (!household) return;
+    webConfirm(
+      '집사 제거',
+      `${member.displayName}님을 이 가구에서 제거할까요?`,
+      async () => {
+        try {
+          await removeMemberFromHousehold(household.id, member.uid, household.memberIds);
+          const newMemberIds = household.memberIds.filter((id) => id !== member.uid);
+          setHousehold({ ...household, memberIds: newMemberIds });
+          setMembers((prev) => prev.filter((m) => m.uid !== member.uid));
+        } catch (e: any) {
+          webAlert('오류', e?.message ?? '제거 중 오류가 발생했어요.');
+        }
+      },
+      '제거',
+    );
+  };
 
   // REQ-V1-04: Share link generation
   const handleShareLink = async () => {
@@ -158,6 +229,81 @@ export default function SettingsScreen() {
           </Card>
         </>)}
 
+        {/* 집사 관리 */}
+        {settingSection('👥 집사 관리', <>
+          <Card style={{ backgroundColor: colors.cream }}>
+            <Text style={styles.shareTitle}>함께 돌보는 집사</Text>
+            <Text style={styles.shareDesc}>
+              같은 가구에 추가된 집사는 고양이, 루틴, 기록을 모두 함께 조회하고 수정할 수 있어요.
+            </Text>
+            {members.map((m) => (
+              <View key={m.uid} style={styles.memberRow}>
+                <View style={styles.memberInfo}>
+                  <Text style={styles.memberName}>{m.displayName}</Text>
+                  <Text style={styles.memberEmail}>{m.email}</Text>
+                </View>
+                <View style={styles.memberBadgeWrap}>
+                  {m.uid === household?.ownerId
+                    ? <Text style={styles.ownerBadge}>집사장</Text>
+                    : isOwner && m.uid !== user?.uid && (
+                      <TouchableOpacity onPress={() => handleRemoveMember(m)}>
+                        <Text style={styles.removeBtn}>제거</Text>
+                      </TouchableOpacity>
+                    )
+                  }
+                </View>
+              </View>
+            ))}
+            {isOwner && (
+              <Button
+                label="+ 집사 추가"
+                variant="secondary"
+                onPress={() => setAddModalVisible(true)}
+                style={{ marginTop: spacing.md }}
+              />
+            )}
+          </Card>
+        </>)}
+
+        {/* 집사 추가 모달 */}
+        <Modal
+          visible={addModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setAddModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>집사 추가</Text>
+              <Text style={styles.modalDesc}>추가할 집사의 가입 이메일을 입력해 주세요.</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="example@email.com"
+                placeholderTextColor={colors.muted}
+                value={emailInput}
+                onChangeText={setEmailInput}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoFocus
+              />
+              <View style={[styles.row, { marginTop: spacing.md }]}>
+                <Button
+                  label="취소"
+                  variant="secondary"
+                  onPress={() => { setAddModalVisible(false); setEmailInput(''); }}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label={addLoading ? '검색 중…' : '추가'}
+                  onPress={handleAddMember}
+                  loading={addLoading}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* IoT (REQ-V5-06 placeholder) */}
         {settingSection('📡 IoT 연동 (준비 중)', <>
           <Card style={{ backgroundColor: colors.warnBg }}>
@@ -214,4 +360,36 @@ const styles = StyleSheet.create({
   iotTitle: { fontSize: 14, fontWeight: '600', color: colors.warnText, marginBottom: 6 },
   iotDesc: { fontSize: 13, color: colors.warnText, lineHeight: 20, opacity: 0.85 },
   version: { textAlign: 'center', fontSize: 12, color: colors.muted, marginTop: spacing.lg },
+
+  // 집사 관리
+  memberRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  memberInfo: { flex: 1 },
+  memberName: { fontSize: 14, fontWeight: '600', color: colors.charcoal },
+  memberEmail: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  memberBadgeWrap: { paddingLeft: 8 },
+  ownerBadge: {
+    fontSize: 11, color: colors.brownMid, backgroundColor: colors.sand,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, overflow: 'hidden',
+  },
+  removeBtn: { fontSize: 12, color: '#e05252', fontWeight: '600' },
+
+  // 모달
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center', alignItems: 'center', padding: spacing.lg,
+  },
+  modalBox: {
+    backgroundColor: '#fff', borderRadius: radius.lg,
+    padding: spacing.xl, width: '100%', maxWidth: 400,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.charcoal, marginBottom: 6 },
+  modalDesc: { fontSize: 13, color: colors.muted, marginBottom: spacing.md },
+  modalInput: {
+    borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md,
+    paddingHorizontal: 14, paddingVertical: 10,
+    fontSize: 14, color: colors.charcoal,
+  },
 });

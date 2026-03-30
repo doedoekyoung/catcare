@@ -122,6 +122,63 @@ export async function getUserById(uid: string): Promise<User | null> {
   return data ? toUser(data) : null;
 }
 
+export async function getUserByEmail(email: string): Promise<User | null> {
+  const { data } = await supabase
+    .from(TABLES.USERS)
+    .select()
+    .eq('email', email.toLowerCase().trim())
+    .single();
+  return data ? toUser(data) : null;
+}
+
+// 집사 추가: household.member_ids에 추가 + 상대방 household_id를 이 household로 변경
+export async function addMemberToHousehold(
+  householdId: string,
+  memberUid: string,
+  currentMemberIds: string[],
+): Promise<void> {
+  const { error: hErr } = await supabase
+    .from(TABLES.HOUSEHOLDS)
+    .update({ member_ids: [...currentMemberIds, memberUid] })
+    .eq('id', householdId);
+  if (hErr) throw hErr;
+
+  const { error: uErr } = await supabase
+    .from(TABLES.USERS)
+    .update({ household_id: householdId })
+    .eq('uid', memberUid);
+  if (uErr) throw uErr;
+}
+
+// 집사 제거: household.member_ids에서 삭제 + 상대방 household_id를 null로 초기화
+export async function removeMemberFromHousehold(
+  householdId: string,
+  memberUid: string,
+  currentMemberIds: string[],
+): Promise<void> {
+  const { error: hErr } = await supabase
+    .from(TABLES.HOUSEHOLDS)
+    .update({ member_ids: currentMemberIds.filter((id) => id !== memberUid) })
+    .eq('id', householdId);
+  if (hErr) throw hErr;
+
+  const { error: uErr } = await supabase
+    .from(TABLES.USERS)
+    .update({ household_id: null })
+    .eq('uid', memberUid);
+  if (uErr) throw uErr;
+}
+
+// 여러 uid로 유저 목록 조회 (멤버 표시용)
+export async function getUsersByIds(uids: string[]): Promise<User[]> {
+  if (uids.length === 0) return [];
+  const { data } = await supabase
+    .from(TABLES.USERS)
+    .select()
+    .in('uid', uids);
+  return (data ?? []).map(toUser);
+}
+
 // ── Households ────────────────────────────────────────────────────────────────
 
 export async function createHousehold(
