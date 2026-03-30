@@ -40,6 +40,22 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
 }
 
+const USER_CACHE_KEY = '_cc_user';
+
+function saveUserCache(user: User): void {
+  try { localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user)); } catch {}
+}
+
+function readUserCache(uid: string): User | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(USER_CACHE_KEY);
+    if (!raw) return null;
+    const u = JSON.parse(raw) as User;
+    return u.uid === uid ? u : null;
+  } catch { return null; }
+}
+
 export function subscribeToAuthState(
   cb: (user: User | null) => void
 ): () => void {
@@ -48,9 +64,14 @@ export function subscribeToAuthState(
       if (!session?.user) { cb(null); return; }
       try {
         const user = await getUserById(session.user.id);
-        cb(user ?? null);
+        if (user) {
+          saveUserCache(user);
+          cb(user);
+        } else {
+          cb(readUserCache(session.user.id));
+        }
       } catch {
-        cb(null);
+        cb(readUserCache(session.user.id));
       }
     }
   );

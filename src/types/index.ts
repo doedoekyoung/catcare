@@ -52,6 +52,7 @@ export interface DailyLog {
   catId?: string;
   text: string;
   photoUri?: string;
+  tagColor?: string;
   householdId: string;
   authorId: string;
   createdAt: string;

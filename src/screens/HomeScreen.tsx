@@ -13,6 +13,13 @@ import { colors, spacing, radius, shadow } from '../utils/theme';
 import { toDateKey, formatDisplayDate } from '../utils/date';
 import type { CheckRecord, Recipe, TimeSlot } from '../types';
 
+const TAG_OPTIONS = [
+  { value: '#EF4444', label: '응급' },
+  { value: '#F97316', label: '위험' },
+  { value: '#EAB308', label: '모니터링' },
+  { value: '#22C55E', label: '안정' },
+];
+
 const TIME_LABELS: Record<TimeSlot, string> = {
   morning: '🌅 아침',
   lunch: '☀️ 점심',
@@ -29,6 +36,7 @@ export default function HomeScreen() {
 
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logText, setLogText] = useState('');
+  const [logTagColor, setLogTagColor] = useState<string | null>(null);
   const [refreshing] = useState(false);
 
   const today = toDateKey();
@@ -71,6 +79,7 @@ export default function HomeScreen() {
     const log = {
       id: existing?.id ?? crypto.randomUUID(),
       date: today, text: logText.trim(),
+      tagColor: logTagColor ?? undefined,
       householdId: household.id, authorId: user.uid,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -87,6 +96,7 @@ export default function HomeScreen() {
 
   const openLogModal = () => {
     setLogText(todayLog?.text ?? '');
+    setLogTagColor(todayLog?.tagColor ?? null);
     setLogModalVisible(true);
   };
 
@@ -255,10 +265,30 @@ export default function HomeScreen() {
           multiline
           numberOfLines={5}
           placeholder="오늘 고양이의 상태, 특이사항 등을 기록해보세요"
-          containerStyle={{ marginBottom: spacing.lg }}
+          containerStyle={{ marginBottom: spacing.md }}
           style={{ minHeight: 120 }}
         />
-        <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={styles.tagRow}>
+          <Text style={styles.tagLabel}>태그</Text>
+          <View style={styles.tagOptions}>
+            <TouchableOpacity
+              style={[styles.tagChip, logTagColor === null && styles.tagChipSelected, { borderColor: colors.border }]}
+              onPress={() => setLogTagColor(null)}
+            >
+              <Text style={[styles.tagChipText, logTagColor === null && { color: colors.charcoal, fontWeight: '600' }]}>없음</Text>
+            </TouchableOpacity>
+            {TAG_OPTIONS.map((t) => (
+              <TouchableOpacity
+                key={t.value}
+                style={[styles.tagChip, { borderColor: t.value, backgroundColor: logTagColor === t.value ? t.value : t.value + '18' }]}
+                onPress={() => setLogTagColor(logTagColor === t.value ? null : t.value)}
+              >
+                <Text style={[styles.tagChipText, { color: logTagColor === t.value ? '#fff' : t.value }]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.md }}>
           <Button label="취소" variant="secondary" onPress={() => setLogModalVisible(false)} style={{ flex: 1 }} />
           <Button label="저장" variant="primary" onPress={handleSaveLog} style={{ flex: 1 }} />
         </View>
@@ -319,4 +349,13 @@ const styles = StyleSheet.create({
   checkTitleDone: { textDecorationLine: 'line-through', color: colors.muted },
   checkMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
   logText: { fontSize: 14, color: colors.charcoal, lineHeight: 22 },
+  tagRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  tagLabel: { fontSize: 13, color: colors.muted, minWidth: 28 },
+  tagOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 },
+  tagChip: {
+    paddingVertical: 5, paddingHorizontal: 12, borderRadius: radius.full,
+    borderWidth: 1.5, backgroundColor: colors.cream,
+  },
+  tagChipSelected: { backgroundColor: colors.charcoal + '18' },
+  tagChipText: { fontSize: 12, color: colors.muted },
 });
