@@ -209,9 +209,16 @@ export default function CatsScreen() {
           text: '삭제', style: 'destructive',
           onPress: async () => {
             if (!household) return;
-            await fsDeleteCat(household.id, cat.id);
-            setCats(cats.filter((c) => c.id !== cat.id));
-            setRecipes(recipes.filter((r) => r.catIds.some((id) => id !== cat.id)));
+            try {
+              // 연결된 루틴도 DB에서 삭제
+              const linked = recipes.filter((r) => r.catIds.includes(cat.id));
+              await Promise.all(linked.map((r) => fsDeleteRecipe(household.id, r.id)));
+              await fsDeleteCat(household.id, cat.id);
+              setCats(cats.filter((c) => c.id !== cat.id));
+              setRecipes(recipes.filter((r) => !r.catIds.includes(cat.id)));
+            } catch (e: any) {
+              Alert.alert('삭제 실패', e?.message ?? '다시 시도해주세요.');
+            }
           },
         },
       ]
@@ -271,8 +278,12 @@ export default function CatsScreen() {
         text: '삭제', style: 'destructive',
         onPress: async () => {
           if (!household) return;
-          await fsDeleteRecipe(household.id, recipe.id);
-          setRecipes(recipes.filter((r) => r.id !== recipe.id));
+          try {
+            await fsDeleteRecipe(household.id, recipe.id);
+            setRecipes(recipes.filter((r) => r.id !== recipe.id));
+          } catch (e: any) {
+            Alert.alert('삭제 실패', e?.message ?? '다시 시도해주세요.');
+          }
         },
       },
     ]);
