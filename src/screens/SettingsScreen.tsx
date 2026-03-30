@@ -3,8 +3,27 @@
 
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share, Platform,
 } from 'react-native';
+
+function webConfirm(title: string, message: string, onConfirm: () => void, confirmLabel = '확인') {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: '취소', style: 'cancel' },
+      { text: confirmLabel, onPress: onConfirm },
+    ]);
+  }
+}
+
+function webAlert(title: string, message?: string) {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { signOut } from '../services/authService';
@@ -38,37 +57,30 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleRegenerateToken = async () => {
+  const handleRegenerateToken = () => {
     if (!household) return;
-    Alert.alert(
+    webConfirm(
       '링크 재생성',
       '기존 링크가 무효화되고 새 링크가 생성됩니다. 계속할까요?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '재생성',
-          onPress: async () => {
-            const token = await regenerateShareToken(household.id);
-            setHousehold({ ...household, shareToken: token });
-            Alert.alert('완료', '새 링크가 생성되었습니다.');
-          },
-        },
-      ]
+      async () => {
+        const token = await regenerateShareToken(household.id);
+        setHousehold({ ...household, shareToken: token });
+        webAlert('완료', '새 링크가 생성되었습니다.');
+      },
+      '재생성',
     );
   };
 
   const handleSignOut = () => {
-    Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '로그아웃',
-        style: 'destructive',
-        onPress: async () => {
-          await signOut();
-          setUser(null);
-        },
+    webConfirm(
+      '로그아웃',
+      '로그아웃 하시겠습니까?',
+      async () => {
+        await signOut();
+        setUser(null);
       },
-    ]);
+      '로그아웃',
+    );
   };
 
   const settingSection = (title: string, children: React.ReactNode) => (

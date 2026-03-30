@@ -2,8 +2,33 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Platform,
 } from 'react-native';
+
+// Alert.alert은 웹에서 동작하지 않으므로 플랫폼별 분기
+function webAlert(title: string, message?: string) {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
+function webConfirm(
+  title: string,
+  message: string,
+  onConfirm: () => void,
+  confirmLabel = '삭제',
+) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: '취소', style: 'cancel' },
+      { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+    ]);
+  }
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useStore } from '../store/useStore';
@@ -195,33 +220,26 @@ export default function CatsScreen() {
       }
       setCatModal(false);
     } catch (e: any) {
-      Alert.alert('오류', `고양이 저장에 실패했습니다.\n${e?.message ?? ''}`);
+      webAlert('오류', `고양이 저장에 실패했습니다.\n${e?.message ?? ''}`);
     }
   };
 
   const handleDeleteCat = (cat: Cat) => {
-    Alert.alert(
+    webConfirm(
       `${cat.name} 삭제`,
       '이 고양이와 연결된 루틴도 모두 삭제됩니다. 계속할까요?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '삭제', style: 'destructive',
-          onPress: async () => {
-            if (!household) return;
-            try {
-              // 연결된 루틴도 DB에서 삭제
-              const linked = recipes.filter((r) => r.catIds.includes(cat.id));
-              await Promise.all(linked.map((r) => fsDeleteRecipe(household.id, r.id)));
-              await fsDeleteCat(household.id, cat.id);
-              setCats(cats.filter((c) => c.id !== cat.id));
-              setRecipes(recipes.filter((r) => !r.catIds.includes(cat.id)));
-            } catch (e: any) {
-              Alert.alert('삭제 실패', e?.message ?? '다시 시도해주세요.');
-            }
-          },
-        },
-      ]
+      async () => {
+        if (!household) return;
+        try {
+          const linked = recipes.filter((r) => r.catIds.includes(cat.id));
+          await Promise.all(linked.map((r) => fsDeleteRecipe(household.id, r.id)));
+          await fsDeleteCat(household.id, cat.id);
+          setCats(cats.filter((c) => c.id !== cat.id));
+          setRecipes(recipes.filter((r) => !r.catIds.includes(cat.id)));
+        } catch (e: any) {
+          webAlert('삭제 실패', e?.message ?? '다시 시도해주세요.');
+        }
+      },
     );
   };
 
@@ -267,26 +285,24 @@ export default function CatsScreen() {
       }
       setRecipeModal(false);
     } catch (e: any) {
-      Alert.alert('오류', `루틴 저장에 실패했습니다.\n${e?.message ?? ''}`);
+      webAlert('오류', `루틴 저장에 실패했습니다.\n${e?.message ?? ''}`);
     }
   };
 
   const handleDeleteRecipe = (recipe: Recipe) => {
-    Alert.alert('루틴 삭제', `"${recipe.name}"을 삭제할까요?`, [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제', style: 'destructive',
-        onPress: async () => {
-          if (!household) return;
-          try {
-            await fsDeleteRecipe(household.id, recipe.id);
-            setRecipes(recipes.filter((r) => r.id !== recipe.id));
-          } catch (e: any) {
-            Alert.alert('삭제 실패', e?.message ?? '다시 시도해주세요.');
-          }
-        },
+    webConfirm(
+      '루틴 삭제',
+      `"${recipe.name}"을 삭제할까요?`,
+      async () => {
+        if (!household) return;
+        try {
+          await fsDeleteRecipe(household.id, recipe.id);
+          setRecipes(recipes.filter((r) => r.id !== recipe.id));
+        } catch (e: any) {
+          webAlert('삭제 실패', e?.message ?? '다시 시도해주세요.');
+        }
       },
-    ]);
+    );
   };
 
   const handleToggleActive = async (recipe: Recipe) => {
