@@ -59,10 +59,13 @@ const TIME_ICONS: Record<TimeSlot, string> = {
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
-// 0 = blank (미선택)
-const YEARS  = [0, ...Array.from({ length: CURRENT_YEAR - 1989 }, (_, i) => CURRENT_YEAR - i)];
-const MONTHS = [0, ...Array.from({ length: 12 }, (_, i) => i + 1)];
-const DAYS   = [0, ...Array.from({ length: 31 }, (_, i) => i + 1)];
+const YEAR_VALUES  = Array.from({ length: CURRENT_YEAR - 1989 }, (_, i) => CURRENT_YEAR - i);
+const MONTH_VALUES = Array.from({ length: 12 }, (_, i) => i + 1);
+const DAY_VALUES   = Array.from({ length: 31 }, (_, i) => i + 1);
+// 네이티브 스크롤 피커용 (0 = 미선택)
+const YEARS  = [0, ...YEAR_VALUES];
+const MONTHS = [0, ...MONTH_VALUES];
+const DAYS   = [0, ...DAY_VALUES];
 
 const ITEM_H   = 44;
 const PICKER_H = ITEM_H * 5;
@@ -88,7 +91,6 @@ function ScrollPicker({
 
   return (
     <View style={{ flex: 1, height: PICKER_H }}>
-      {/* Center highlight */}
       <View
         pointerEvents="none"
         style={{
@@ -132,6 +134,68 @@ function ScrollPicker({
           );
         })}
       </ScrollView>
+    </View>
+  );
+}
+
+// 웹: <select> 드롭다운 / 네이티브: 스크롤 피커
+function DateDropdown({
+  values, nativeValues, selected, onSelect, renderLabel, placeholder, color, disabled,
+}: {
+  values: number[];           // 웹 옵션 목록 (0 제외)
+  nativeValues: number[];     // 네이티브 스크롤 피커용 (0 포함)
+  selected: number | null;
+  onSelect: (v: number | null) => void;
+  renderLabel: (v: number) => string;
+  placeholder: string;
+  color: string;
+  disabled?: boolean;
+}) {
+  if (Platform.OS === 'web') {
+    const Sel = 'select' as any;
+    return (
+      <Sel
+        value={selected ?? ''}
+        disabled={disabled}
+        onChange={(e: any) => {
+          const v = Number(e.target.value);
+          onSelect(v || null);
+        }}
+        style={{
+          width: '100%',
+          height: 44,
+          border: `1.5px solid ${selected ? color : '#DDD0C4'}`,
+          borderRadius: 8,
+          backgroundColor: disabled ? '#EEEBE8' : '#FAF6F0',
+          fontSize: 14,
+          color: selected ? color : '#8C7B70',
+          paddingLeft: 10,
+          paddingRight: 4,
+          outline: 'none',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+          fontFamily: 'inherit',
+          appearance: 'auto',
+        }}
+      >
+        <option value="">{placeholder}</option>
+        {values.map((v) => (
+          <option key={v} value={v}>{renderLabel(v)}</option>
+        ))}
+      </Sel>
+    );
+  }
+
+  // 네이티브: 기존 스크롤 피커
+  return (
+    <View style={[styles.pickerContainer, disabled && styles.pickerDisabled]}>
+      <ScrollPicker
+        values={nativeValues}
+        selected={selected}
+        onSelect={(v) => { if (!disabled) onSelect(v); }}
+        renderLabel={(v) => v === 0 ? '-' : renderLabel(v)}
+        color={color}
+      />
     </View>
   );
 }
@@ -497,44 +561,46 @@ export default function CatsScreen() {
             ))}
           </View>
 
-          {/* 생년월일 — 3단 스크롤 피커 */}
+          {/* 생년월일 — 드롭다운 (웹) / 스크롤 피커 (네이티브) */}
           <Text style={styles.fieldLabel}>생년월일/만난 날</Text>
           <View style={styles.pickerRow}>
             <View style={styles.pickerCol}>
               <Text style={styles.pickerLabel}>년</Text>
-              <View style={styles.pickerContainer}>
-                <ScrollPicker
-                  values={YEARS}
-                  selected={catBirthYear}
-                  onSelect={(v) => { setCatBirthYear(v); if (!v) { setCatBirthMonth(null); setCatBirthDay(null); } }}
-                  renderLabel={(v) => v === 0 ? '-' : `${v}`}
-                  color={catTagColor}
-                />
-              </View>
+              <DateDropdown
+                values={YEAR_VALUES}
+                nativeValues={YEARS}
+                selected={catBirthYear}
+                onSelect={(v) => { setCatBirthYear(v); if (!v) { setCatBirthMonth(null); setCatBirthDay(null); } }}
+                renderLabel={(v) => `${v}년`}
+                placeholder="년도"
+                color={catTagColor}
+              />
             </View>
             <View style={styles.pickerCol}>
               <Text style={styles.pickerLabel}>월</Text>
-              <View style={[styles.pickerContainer, !catBirthYear && styles.pickerDisabled]}>
-                <ScrollPicker
-                  values={MONTHS}
-                  selected={catBirthMonth}
-                  onSelect={(v) => { if (catBirthYear) { setCatBirthMonth(v); if (!v) setCatBirthDay(null); } }}
-                  renderLabel={(v) => v === 0 ? '-' : `${v}월`}
-                  color={catTagColor}
-                />
-              </View>
+              <DateDropdown
+                values={MONTH_VALUES}
+                nativeValues={MONTHS}
+                selected={catBirthMonth}
+                onSelect={(v) => { setCatBirthMonth(v); if (!v) setCatBirthDay(null); }}
+                renderLabel={(v) => `${v}월`}
+                placeholder="월"
+                color={catTagColor}
+                disabled={!catBirthYear}
+              />
             </View>
             <View style={styles.pickerCol}>
               <Text style={styles.pickerLabel}>일</Text>
-              <View style={[styles.pickerContainer, !catBirthMonth && styles.pickerDisabled]}>
-                <ScrollPicker
-                  values={DAYS}
-                  selected={catBirthDay}
-                  onSelect={(v) => { if (catBirthMonth) setCatBirthDay(v); }}
-                  renderLabel={(v) => v === 0 ? '-' : `${v}일`}
-                  color={catTagColor}
-                />
-              </View>
+              <DateDropdown
+                values={DAY_VALUES}
+                nativeValues={DAYS}
+                selected={catBirthDay}
+                onSelect={setCatBirthDay}
+                renderLabel={(v) => `${v}일`}
+                placeholder="일"
+                color={catTagColor}
+                disabled={!catBirthMonth}
+              />
             </View>
           </View>
 
