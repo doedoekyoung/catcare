@@ -1,7 +1,7 @@
 // src/screens/RecordsScreen.tsx
 // REQ-M08~M10, V4-02, V4-05, V5-03~04
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -40,6 +40,25 @@ export default function RecordsScreen() {
   const [exportLoading, setExportLoading] = useState(false);
   const [selectedCatFilter, setSelectedCatFilter] = useState<string | null>(null);
 
+  // 과거 30일 체크 기록 (DB에서 직접 로드)
+  const [historyChecks, setHistoryChecks] = useState<import('../types').CheckRecord[]>([]);
+  useEffect(() => {
+    if (!household?.id) return;
+    const startDate = getLast30Days()[0];
+    getChecksForDateRange(household.id, startDate, today)
+      .then(setHistoryChecks)
+      .catch(() => {});
+  }, [household?.id]);
+
+  // 과거 기록 + 오늘 실시간 데이터 병합
+  const allChecks = useMemo(() => {
+    const map: Record<string, import('../types').CheckRecord> = {};
+    historyChecks.forEach((c) => { map[c.id] = c; });
+    // 오늘 데이터는 store의 실시간 값으로 덮어씀
+    Object.values(checks).forEach((c) => { if (c) map[c.id] = c; });
+    return map;
+  }, [historyChecks, checks]);
+
   // Posts calendar state
   const nowDate = new Date();
   const [calYear, setCalYear] = useState(nowDate.getFullYear());
@@ -51,15 +70,15 @@ export default function RecordsScreen() {
   // Collect all dates that have activity
   const activeDates = useMemo(() => {
     const dates = new Set<string>();
-    Object.values(checks).forEach((c) => c?.date && dates.add(c.date));
+    Object.values(allChecks).forEach((c) => c?.date && dates.add(c.date));
     logs.forEach((l) => dates.add(l.date));
     return [...dates].sort((a, b) => b.localeCompare(a));
-  }, [checks, logs]);
+  }, [allChecks, logs]);
 
   // Weekly stats for chart
   const weeklyStats = useMemo(
-    () => selectWeeklyStats(recipes, checks, cats),
-    [recipes, checks, cats]
+    () => selectWeeklyStats(recipes, allChecks, cats),
+    [recipes, allChecks, cats]
   );
 
   // Insight counts
@@ -231,7 +250,7 @@ export default function RecordsScreen() {
           )}
 
           {activeDates.map((date) => {
-            const dayChecks = Object.values(checks)
+            const dayChecks = Object.values(allChecks)
               .filter((c) => {
                 if (c?.date !== date) return false;
                 if (selectedCatFilter && c?.catId !== selectedCatFilter) return false;
