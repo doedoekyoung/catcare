@@ -36,17 +36,28 @@ export async function signInWithEmail(
 }
 
 export async function signOut(): Promise<void> {
+  clearUserCache();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
 
 const USER_CACHE_KEY = '_cc_user';
 
+// 메모리 캐시 — 모바일(localStorage 없음)에서도 세션 중 복구 가능
+let _memCache: User | null = null;
+
 function saveUserCache(user: User): void {
+  _memCache = user;
   try { localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user)); } catch {}
 }
 
+function clearUserCache(): void {
+  _memCache = null;
+  try { localStorage.removeItem(USER_CACHE_KEY); } catch {}
+}
+
 function readUserCache(uid: string): User | null {
+  if (_memCache?.uid === uid) return _memCache;
   try {
     if (typeof localStorage === 'undefined') return null;
     const raw = localStorage.getItem(USER_CACHE_KEY);
