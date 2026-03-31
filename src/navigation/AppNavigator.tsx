@@ -26,13 +26,6 @@ import { toDateKey } from '../utils/date';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-const TAB_ICONS: Record<string, { default: string; active: string }> = {
-  Home:     { default: '🏠', active: '🏡' },
-  Cats:     { default: '🐱', active: '🐈' },
-  Records:  { default: '📓', active: '📗' },
-  Settings: { default: '⚙️', active: '⚙️' },
-};
-
 const TAB_LABELS: Record<string, string> = {
   Home: '홈', Cats: '고양이', Records: '기록', Settings: '설정',
 };
@@ -47,19 +40,13 @@ function MainTabs() {
           borderTopWidth: 1.5,
           borderTopColor: colors.border,
           paddingBottom: 8,
-          height: 64,
+          height: 48,
         },
         tabBarActiveTintColor: colors.caramel,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabel: TAB_LABELS[route.name],
-        tabBarIcon: ({ focused, size }) => (
-          <Text style={{ fontSize: 22 }}>
-            {focused
-              ? TAB_ICONS[route.name]?.active
-              : TAB_ICONS[route.name]?.default}
-          </Text>
-        ),
-        tabBarLabelStyle: { fontSize: 11, marginBottom: 2 },
+        tabBarIcon: () => null,
+        tabBarLabelStyle: { fontSize: 13, marginBottom: 2 },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
