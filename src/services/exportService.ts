@@ -163,7 +163,7 @@ function buildReportHTML(opts: ExportOptions): string {
 </style>
 </head><body>
 <h1>🐱 CatCare 건강 리포트</h1>
-<p>${householdName} · ${dateRange}</p>
+<p>${dateRange}</p>
 ${catSections}
 <h2>📓 데일리 로그</h2>
 ${logSection || '<p style="color:#8C7B70">기록된 로그가 없습니다.</p>'}
