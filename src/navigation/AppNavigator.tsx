@@ -5,7 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Text, View, TouchableOpacity } from 'react-native';
-import { signOut } from '../services/authService';
+import { clearLocalSession } from '../services/authService';
 
 import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -81,9 +81,12 @@ export default function AppNavigator() {
   const dataUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    // 3초 후 초기화 버튼 노출, 6초 후 로그인 화면으로 폴백
+    // 3초 후 초기화 버튼 노출, 5초 후 로컬 세션 자동 초기화 후 로그인 화면
     const resetTimer = setTimeout(() => setShowReset(true), 3000);
-    const fallback = setTimeout(() => setAuthLoaded(true), 6000);
+    const fallback = setTimeout(async () => {
+      await clearLocalSession();
+      setAuthLoaded(true);
+    }, 5000);
 
     const unsubAuth = subscribeToAuthState(async (u) => {
       clearTimeout(fallback);
@@ -143,7 +146,7 @@ export default function AppNavigator() {
               borderRadius: 20, borderWidth: 1.5, borderColor: colors.caramel,
             }}
             onPress={async () => {
-              try { await signOut(); } catch {}
+              await clearLocalSession();
               if (typeof window !== 'undefined') window.location.reload();
             }}
           >

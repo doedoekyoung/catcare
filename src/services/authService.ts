@@ -41,6 +41,13 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
 }
 
+// 로컬 세션만 초기화 (서버 세션 유지 → 재로그인 시 데이터 안전)
+// 만료된 토큰이 걸려있을 때 사용
+export async function clearLocalSession(): Promise<void> {
+  clearUserCache();
+  try { await supabase.auth.signOut({ scope: 'local' }); } catch {}
+}
+
 const USER_CACHE_KEY = '_cc_user';
 
 // 메모리 캐시 — 모바일(localStorage 없음)에서도 세션 중 복구 가능
