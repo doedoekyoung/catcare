@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { Text, View } from 'react-native';
+import { Text, View, TouchableOpacity } from 'react-native';
+import { signOut } from '../services/authService';
 
 import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -76,10 +77,12 @@ export default function AppNavigator() {
   } = useStore();
 
   const [authLoaded, setAuthLoaded] = useState(false);
+  const [showReset, setShowReset] = useState(false);
   const dataUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    // 환경변수 누락 등으로 auth 콜백이 영원히 안 올 경우 폴백
+    // 3초 후 초기화 버튼 노출, 6초 후 로그인 화면으로 폴백
+    const resetTimer = setTimeout(() => setShowReset(true), 3000);
     const fallback = setTimeout(() => setAuthLoaded(true), 6000);
 
     const unsubAuth = subscribeToAuthState(async (u) => {
@@ -118,6 +121,7 @@ export default function AppNavigator() {
     });
 
     return () => {
+      clearTimeout(resetTimer);
       clearTimeout(fallback);
       unsubAuth();
       if (dataUnsubRef.current) {
@@ -132,6 +136,20 @@ export default function AppNavigator() {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream }}>
         <Text style={{ fontSize: 36 }}>🐱</Text>
         <Text style={{ color: colors.muted, marginTop: 12 }}>로딩 중...</Text>
+        {showReset && (
+          <TouchableOpacity
+            style={{
+              marginTop: 32, paddingVertical: 10, paddingHorizontal: 24,
+              borderRadius: 20, borderWidth: 1.5, borderColor: colors.caramel,
+            }}
+            onPress={async () => {
+              try { await signOut(); } catch {}
+              if (typeof window !== 'undefined') window.location.reload();
+            }}
+          >
+            <Text style={{ color: colors.caramel, fontSize: 14 }}>로그인 문제 해결</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
