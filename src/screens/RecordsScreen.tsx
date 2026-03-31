@@ -163,13 +163,13 @@ export default function RecordsScreen() {
           style={[styles.tab, activeTab === 'records' && styles.tabActive]}
           onPress={() => setActiveTab('records')}
         >
-          <Text style={[styles.tabText, activeTab === 'records' && styles.tabTextActive]}>📋 기록</Text>
+          <Text style={[styles.tabText, activeTab === 'records' && styles.tabTextActive]}>기록</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
           onPress={() => setActiveTab('posts')}
         >
-          <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>📅 포스트</Text>
+          <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>달력</Text>
         </TouchableOpacity>
       </View>
 
