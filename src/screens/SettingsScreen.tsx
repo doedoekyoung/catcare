@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share, Platform,
-  Modal, TextInput, ActivityIndicator,
+  Modal, TextInput, ActivityIndicator, Pressable,
 } from 'react-native';
 
 function webConfirm(title: string, message: string, onConfirm: () => void, confirmLabel = '확인') {
@@ -267,43 +267,79 @@ export default function SettingsScreen() {
         </>)}
 
         {/* 집사 추가 모달 */}
-        <Modal
-          visible={addModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setAddModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>집사 추가</Text>
-              <Text style={styles.modalDesc}>추가할 집사의 가입 이메일을 입력해 주세요.</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="example@email.com"
-                placeholderTextColor={colors.muted}
-                value={emailInput}
-                onChangeText={setEmailInput}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoFocus
-              />
-              <View style={[styles.row, { marginTop: spacing.md }]}>
-                <Button
-                  label="취소"
-                  variant="secondary"
-                  onPress={() => { setAddModalVisible(false); setEmailInput(''); }}
-                  style={{ flex: 1 }}
+        {Platform.OS === 'web' ? (
+          addModalVisible ? (
+            <View style={styles.modalOverlayFixed}>
+              <Pressable style={styles.modalBackdrop} onPress={() => { setAddModalVisible(false); setEmailInput(''); }} />
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>집사 추가</Text>
+                <Text style={styles.modalDesc}>추가할 집사의 가입 이메일을 입력해 주세요.</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="example@email.com"
+                  placeholderTextColor={colors.muted}
+                  value={emailInput}
+                  onChangeText={setEmailInput}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoFocus
                 />
-                <Button
-                  label={addLoading ? '검색 중…' : '추가'}
-                  onPress={handleAddMember}
-                  loading={addLoading}
-                  style={{ flex: 1 }}
-                />
+                <View style={[styles.row, { marginTop: spacing.md }]}>
+                  <Button
+                    label="취소"
+                    variant="secondary"
+                    onPress={() => { setAddModalVisible(false); setEmailInput(''); }}
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    label={addLoading ? '검색 중…' : '추가'}
+                    onPress={handleAddMember}
+                    loading={addLoading}
+                    style={{ flex: 1 }}
+                  />
+                </View>
               </View>
             </View>
-          </View>
-        </Modal>
+          ) : null
+        ) : (
+          <Modal
+            visible={addModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setAddModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>집사 추가</Text>
+                <Text style={styles.modalDesc}>추가할 집사의 가입 이메일을 입력해 주세요.</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="example@email.com"
+                  placeholderTextColor={colors.muted}
+                  value={emailInput}
+                  onChangeText={setEmailInput}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoFocus
+                />
+                <View style={[styles.row, { marginTop: spacing.md }]}>
+                  <Button
+                    label="취소"
+                    variant="secondary"
+                    onPress={() => { setAddModalVisible(false); setEmailInput(''); }}
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    label={addLoading ? '검색 중…' : '추가'}
+                    onPress={handleAddMember}
+                    loading={addLoading}
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </View>
+            </View>
+          </Modal>
+        )}
 
         {/* IoT (REQ-V5-06 placeholder) */}
         {settingSection('📡 IoT 연동 (준비 중)', <>
@@ -381,6 +417,17 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center', alignItems: 'center', padding: spacing.lg,
+  },
+  modalOverlayFixed: {
+    position: 'fixed' as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 9999,
+    justifyContent: 'center', alignItems: 'center', padding: spacing.lg,
+  },
+  modalBackdrop: {
+    position: 'absolute' as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   modalBox: {
     backgroundColor: '#fff', borderRadius: radius.lg,

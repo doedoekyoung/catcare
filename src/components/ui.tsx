@@ -12,6 +12,7 @@ import {
   Modal,
   ScrollView,
   Pressable,
+  Platform,
   type TextInputProps,
   type ViewStyle,
   type TextStyle,
@@ -131,6 +132,21 @@ interface SheetProps {
 }
 
 export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
+  if (Platform.OS === 'web') {
+    if (!visible) return null;
+    return (
+      <View style={styles.overlayFixed} pointerEvents="box-none">
+        <Pressable style={styles.overlayTouchable} onPress={onClose} />
+        <View style={styles.sheet}>
+          <View style={styles.sheetHandle} />
+          {title && <Text style={styles.sheetTitle}>{title}</Text>}
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
   return (
     <Modal
       visible={visible}
@@ -246,6 +262,17 @@ const styles = StyleSheet.create({
 
   // Sheet
   overlay: { flex: 1, backgroundColor: 'rgba(44,36,32,0.4)', justifyContent: 'flex-end' },
+  overlayFixed: {
+    position: 'fixed' as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 9999,
+    justifyContent: 'flex-end',
+  },
+  overlayTouchable: {
+    position: 'absolute' as any,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(44,36,32,0.4)',
+  },
   sheet: {
     backgroundColor: colors.warmWhite, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl,
     padding: spacing.lg, paddingBottom: 40, maxHeight: '85%',
