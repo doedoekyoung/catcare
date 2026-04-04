@@ -155,13 +155,17 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
 
   if (Platform.OS === 'web') {
     if (!visible) return null;
-    return (
+    // createPortal로 document.body에 직접 렌더링
+    // → GestureHandlerRootView 등 부모의 transform이 만드는 stacking context 우회
+    const { createPortal } = require('react-dom');
+    return createPortal(
       <View style={styles.overlayFixed} pointerEvents="box-none">
         <Pressable style={styles.overlayTouchable} onPress={onClose} />
         <View style={[styles.sheet, { maxHeight: maxSheetHeight }]}>
           {sheetContent}
         </View>
-      </View>
+      </View>,
+      document.body
     );
   }
   return (
