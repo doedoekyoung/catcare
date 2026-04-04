@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.warmWhite },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg, height: 56,
     borderBottomWidth: 1.5, borderBottomColor: colors.border,
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: colors.charcoal },
