@@ -74,19 +74,20 @@ interface InputProps extends TextInputProps {
   containerStyle?: ViewStyle;
 }
 
-export function Input({ label, error, containerStyle, style, ...props }: InputProps) {
-  return (
+export const Input = React.forwardRef<TextInput, InputProps>(
+  ({ label, error, containerStyle, style, ...props }, ref) => (
     <View style={[styles.inputContainer, containerStyle]}>
       {label && <Text style={styles.inputLabel}>{label}</Text>}
       <TextInput
+        ref={ref}
         style={[styles.inputField, error && styles.inputError, style]}
         placeholderTextColor={colors.muted}
         {...props}
       />
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
-  );
-}
+  )
+);
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 

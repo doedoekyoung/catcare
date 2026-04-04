@@ -1,8 +1,8 @@
 // src/screens/AuthScreen.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView,
+  View, Text, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { signUpWithEmail, signInWithEmail } from '../services/authService';
@@ -19,6 +19,8 @@ export default function AuthScreen() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const passwordRef = useRef<TextInput>(null);
+  const nameRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
     if (!email || !password) { setError('이메일과 비밀번호를 입력해주세요'); return; }
@@ -87,20 +89,30 @@ export default function AuthScreen() {
             placeholder="example@email.com"
             keyboardType="email-address"
             autoCapitalize="none"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+            blurOnSubmit={false}
           />
           <Input
+            ref={passwordRef}
             label="비밀번호"
             value={password}
             onChangeText={setPassword}
             placeholder="6자 이상"
             secureTextEntry
+            returnKeyType={mode === 'login' ? 'go' : 'next'}
+            onSubmitEditing={mode === 'login' ? handleLogin : () => nameRef.current?.focus()}
+            blurOnSubmit={mode === 'login'}
           />
           {mode === 'signup' && (
             <Input
+              ref={nameRef}
               label="이름 *"
               value={name}
               onChangeText={setName}
               placeholder="집사 이름"
+              returnKeyType="go"
+              onSubmitEditing={handleSignUp}
             />
           )}
 

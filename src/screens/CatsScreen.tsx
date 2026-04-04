@@ -489,7 +489,9 @@ export default function CatsScreen() {
         )}
 
         {cats.map((cat) => {
-          const catRecipes = recipes.filter((r) => r.catIds.includes(cat.id));
+          const catRecipes = recipes
+            .filter((r) => r.catIds.includes(cat.id))
+            .sort((a, b) => (a.createdAt ?? a.id).localeCompare(b.createdAt ?? b.id));
           const tagColor = cat.tagColor ?? colors.caramel;
           const isExpanded = expandedCatId === cat.id;
           const genderLabel = cat.gender === 'male' ? '남아' : cat.gender === 'female' ? '여아' : '';
@@ -774,7 +776,7 @@ export default function CatsScreen() {
               setTimeout(() => handleDeleteRecipe(editingRecipe), 300);
             }}
           >
-            <Text style={styles.deleteRecipeBtnText}>이 루틴 삭제</Text>
+            <Text style={styles.deleteRecipeBtnText}>루틴 삭제</Text>
           </TouchableOpacity>
         )}
       </BottomSheet>
@@ -950,7 +952,7 @@ const styles = StyleSheet.create({
   deleteRecipeBtn: {
     alignSelf: 'center', marginTop: spacing.md, paddingVertical: 6,
   },
-  deleteRecipeBtnText: { fontSize: 13, color: '#EF4444' },
+  deleteRecipeBtnText: { fontSize: 13, color: colors.border },
   deleteCatBtnText: { fontSize: 13, color: colors.border },
 
   // 7-day history (unused, kept for safety)
