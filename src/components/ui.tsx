@@ -161,38 +161,31 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
           backgroundColor: 'rgba(44,36,32,0.4)',
         }}
       >
-        <div
+        {/* 시트 내부는 RN 컴포넌트 — 버튼/Input 이벤트 정상 동작 보장 */}
+        <View
+          style={[styles.sheet, { maxHeight: maxSheetHeight }]}
+          // @ts-ignore — web에서 native onClick으로 backdrop 전파 차단
           onClick={(e: any) => e.stopPropagation()}
-          style={{
-            width: '100%', maxWidth: 430,
-            maxHeight: maxSheetHeight,
-            backgroundColor: '#FFFDF9',
-            borderTopLeftRadius: 24, borderTopRightRadius: 24,
-            padding: 20,
-            display: 'flex', flexDirection: 'column',
-            boxSizing: 'border-box' as const,
-          }}
         >
-          {/* 핸들 — 탭으로 닫기 + 스와이프 다운 */}
-          <div
-            onClick={onClose}
-            onTouchStart={(e: any) => onDragStart(e.touches[0].clientY)}
-            onTouchEnd={(e: any) => onDragEnd(e.changedTouches[0].clientY)}
-            onMouseDown={(e: any) => onDragStart(e.clientY)}
-            onMouseUp={(e: any) => onDragEnd(e.clientY)}
-            style={{
-              padding: '8px 0 12px', cursor: 'pointer',
-              display: 'flex', justifyContent: 'center',
-              touchAction: 'none',
-            }}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onClose}
+            style={{ padding: 8, alignItems: 'center' }}
+            // @ts-ignore
+            onTouchStart={(e: any) => { if (e.nativeEvent) onDragStart(e.nativeEvent.pageY); }}
+            onTouchEnd={(e: any) => { if (e.nativeEvent) onDragEnd(e.nativeEvent.pageY); }}
           >
-            <div style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2D5C8' }} />
-          </div>
-          {title && <div style={{ fontSize: 20, fontWeight: 700, color: '#2C2420', marginBottom: 20 }}>{title}</div>}
-          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: bottomPad }}>
+            <View style={styles.sheetHandle} />
+          </TouchableOpacity>
+          {title && <Text style={styles.sheetTitle}>{title}</Text>}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: bottomPad }}
+          >
             {children}
-          </div>
-        </div>
+          </ScrollView>
+        </View>
       </div>,
       document.body
     );

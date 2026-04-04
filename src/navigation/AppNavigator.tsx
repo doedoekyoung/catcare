@@ -73,15 +73,24 @@ export default function AppNavigator() {
     const fallback = setTimeout(async () => {
       await clearLocalSession();
       setAuthLoaded(true);
-    }, 5000);
+    }, 3000);
 
     const unsubAuth = subscribeToAuthState(async (u) => {
+      clearTimeout(resetTimer);
       clearTimeout(fallback);
 
       // 이전 Realtime 구독 정리 (중복 채널 방지)
       if (dataUnsubRef.current) {
         dataUnsubRef.current();
         dataUnsubRef.current = null;
+      }
+
+      // 세션 없음 → stale 토큰 정리 후 로그인 화면
+      if (!u) {
+        await clearLocalSession();
+        setUser(null);
+        setAuthLoaded(true);
+        return;
       }
 
       setUser(u);

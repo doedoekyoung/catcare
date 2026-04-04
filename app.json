@@ -14,7 +14,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.yourteam.catcare",
+      "bundleIdentifier": "com.catcare.app",
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "고양이 사진을 찍기 위해 카메라 접근이 필요합니다.",
@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FAF6F0"
       },
-      "package": "com.yourteam.catcare",
+      "package": "com.catcare.app",
       "versionCode": 1,
       "permissions": [
         "CAMERA",

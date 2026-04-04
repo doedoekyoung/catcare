@@ -78,18 +78,39 @@ export function subscribeToAuthState(
   cb: (user: User | null) => void
 ): () => void {
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    async (_event, session) => {
-      if (!session?.user) { cb(null); return; }
+    async (event, session) => {
+      // 명시적 로그아웃 or 세션 없음 → 캐시 정리 후 로그인 화면
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !session?.user) {
+        clearUserCache();
+        cb(null);
+        return;
+      }
       try {
         const user = await getUserById(session.user.id);
         if (user) {
           saveUserCache(user);
           cb(user);
         } else {
+          // DB에 유저 레코드 없음 → stale 세션으로 판단, 초기화
+          clearUserCache();
+          await supabase.auth.signOut({ scope: 'local' });
+          cb(null);
+        }
+      } catch (e: any) {
+        // 인증 오류(401/JWT) → stale 토큰 자동 제거
+        const isAuthError =
+          e?.status === 401 ||
+          String(e?.message ?? '').toLowerCase().includes('jwt') ||
+          String(e?.message ?? '').toLowerCase().includes('token') ||
+          e?.code === 'PGRST301';
+        if (isAuthError) {
+          clearUserCache();
+          await supabase.auth.signOut({ scope: 'local' });
+          cb(null);
+        } else {
+          // 네트워크 오류 등 일시적 오류 → 캐시로 유지
           cb(readUserCache(session.user.id));
         }
-      } catch {
-        cb(readUserCache(session.user.id));
       }
     }
   );
