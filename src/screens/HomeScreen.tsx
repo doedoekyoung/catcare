@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   catTabBar: { flexDirection: 'row', paddingHorizontal: spacing.lg },
   catTab: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingVertical: 10, paddingHorizontal: 2, marginRight: 18,
+    paddingVertical: 6, paddingHorizontal: 2, marginRight: 18,
     borderBottomWidth: 2, borderBottomColor: 'transparent',
   },
   catTabActive: { borderBottomColor: colors.caramel },

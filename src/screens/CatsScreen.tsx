@@ -45,7 +45,6 @@ import type { Cat, Recipe, TimeSlot, CheckRecord } from '../types';
 const GENDER_OPTIONS = [
   { value: 'male' as const, label: '남아' },
   { value: 'female' as const, label: '여아' },
-  { value: 'neutered' as const, label: '중성화' },
 ];
 
 const TIME_OPTIONS: { value: TimeSlot; label: string }[] = [
@@ -277,7 +276,6 @@ export default function CatsScreen() {
   const [catName, setCatName] = useState('');
   const [catPhotoUri, setCatPhotoUri] = useState('');
   const [catGender, setCatGender] = useState<'male' | 'female' | ''>('');
-  const [catNeutered, setCatNeutered] = useState(false);
   const [catTagColor, setCatTagColor] = useState<string>(CAT_TAG_COLORS[0]);
   const [catBirthYear, setCatBirthYear] = useState<number | null>(null);
   const [catBirthMonth, setCatBirthMonth] = useState<number | null>(null);
@@ -307,7 +305,7 @@ export default function CatsScreen() {
 
   const openAddCat = () => {
     setEditingCat(null);
-    setCatName(''); setCatPhotoUri(''); setCatGender(''); setCatNeutered(false);
+    setCatName(''); setCatPhotoUri(''); setCatGender('');
     setCatTagColor(CAT_TAG_COLORS[0]);
     setCatBirthYear(null); setCatBirthMonth(null); setCatBirthDay(null);
     setCatNotes('');
@@ -319,7 +317,6 @@ export default function CatsScreen() {
     setCatName(cat.name);
     setCatPhotoUri(cat.photoUri ?? '');
     setCatGender(cat.gender === 'male' ? 'male' : cat.gender === 'female' ? 'female' : '');
-    setCatNeutered(cat.gender === 'neutered');
     setCatTagColor(cat.tagColor ?? CAT_TAG_COLORS[0]);
     setCatBirthYear(cat.birthYear ?? null);
     setCatBirthMonth(cat.birthMonth ?? null);
@@ -625,16 +622,6 @@ export default function CatsScreen() {
               <Text style={[styles.optionText, catGender === 'female' && styles.optionTextSel]}>여아</Text>
             </TouchableOpacity>
           </View>
-          {!!catGender && (
-            <View style={{ marginBottom: spacing.md, marginTop: -8 }}>
-              <TouchableOpacity
-                style={[styles.optionChip, catNeutered && styles.optionChipSel]}
-                onPress={() => setCatNeutered((v) => !v)}
-              >
-                <Text style={[styles.optionText, catNeutered && styles.optionTextSel]}>+ 중성화</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {/* 생년월일 — 드롭다운 (웹) / 스크롤 피커 (네이티브) */}
           <Text style={styles.fieldLabel}>생년월일/만난 날</Text>
