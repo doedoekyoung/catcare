@@ -73,7 +73,7 @@ export default function AppNavigator() {
     const fallback = setTimeout(async () => {
       await clearLocalSession();
       setAuthLoaded(true);
-    }, 3000);
+    }, 5000);
 
     const unsubAuth = subscribeToAuthState(async (u) => {
       clearTimeout(resetTimer);
@@ -85,9 +85,8 @@ export default function AppNavigator() {
         dataUnsubRef.current = null;
       }
 
-      // 세션 없음 → stale 토큰 정리 후 로그인 화면
+      // 세션 없음 → 로그인 화면 (authService에서 이미 캐시/토큰 정리 완료)
       if (!u) {
-        await clearLocalSession();
         setUser(null);
         setAuthLoaded(true);
         return;
