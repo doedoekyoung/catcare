@@ -2,6 +2,7 @@
 import { supabase, TABLES } from './supabase';
 import type { Cat, Recipe, CheckRecord, DailyLog, Household, User } from '../types';
 import { toISOString } from '../utils/date';
+import { throttleWrite, LIMITS, truncate } from '../utils/rateLimit';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -246,6 +247,10 @@ export async function addCat(
   householdId: string,
   catData: Omit<Cat, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<Cat> {
+  if (!throttleWrite(`addCat-${householdId}`)) throw new Error('잠시 후 다시 시도해주세요.');
+  const { count } = await supabase.from(TABLES.CATS).select('id', { count: 'exact', head: true }).eq('household_id', householdId);
+  if ((count ?? 0) >= LIMITS.MAX_CATS) throw new Error(`고양이는 최대 ${LIMITS.MAX_CATS}마리까지 등록할 수 있습니다.`);
+  catData = { ...catData, name: truncate(catData.name, LIMITS.MAX_NAME_LENGTH), notes: catData.notes ? truncate(catData.notes, LIMITS.MAX_TEXT_LENGTH) : undefined };
   const now = toISOString(new Date());
   const { data, error } = await supabase
     .from(TABLES.CATS)
@@ -276,8 +281,9 @@ export async function updateCat(
   catId: string,
   data: Partial<Cat>
 ): Promise<void> {
+  if (!throttleWrite(`updateCat-${catId}`, 500)) throw new Error('잠시 후 다시 시도해주세요.');
   const update: Record<string, any> = { updated_at: toISOString(new Date()) };
-  if (data.name !== undefined) update.name = data.name;
+  if (data.name !== undefined) update.name = truncate(data.name, LIMITS.MAX_NAME_LENGTH);
   if (data.photoUri !== undefined) update.photo_uri = data.photoUri;
   if (data.gender !== undefined) update.gender = data.gender;
   if (data.tagColor !== undefined) update.tag_color = data.tagColor;
@@ -336,6 +342,10 @@ export async function addRecipe(
   householdId: string,
   data: Omit<Recipe, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<Recipe> {
+  if (!throttleWrite(`addRecipe-${householdId}`)) throw new Error('잠시 후 다시 시도해주세요.');
+  const { count } = await supabase.from(TABLES.RECIPES).select('id', { count: 'exact', head: true }).eq('household_id', householdId);
+  if ((count ?? 0) >= LIMITS.MAX_RECIPES) throw new Error(`루틴은 최대 ${LIMITS.MAX_RECIPES}개까지 등록할 수 있습니다.`);
+  data = { ...data, name: truncate(data.name, LIMITS.MAX_NAME_LENGTH) };
   const now = toISOString(new Date());
   const { data: row, error } = await supabase
     .from(TABLES.RECIPES)
@@ -362,8 +372,9 @@ export async function updateRecipe(
   recipeId: string,
   data: Partial<Recipe>
 ): Promise<void> {
+  if (!throttleWrite(`updateRecipe-${recipeId}`, 500)) throw new Error('잠시 후 다시 시도해주세요.');
   const update: Record<string, any> = { updated_at: toISOString(new Date()) };
-  if (data.name !== undefined) update.name = data.name;
+  if (data.name !== undefined) update.name = truncate(data.name, LIMITS.MAX_NAME_LENGTH);
   if (data.times !== undefined) update.times = data.times;
   if (data.days !== undefined) update.days = data.days;
   if (data.catIds !== undefined) update.cat_ids = data.catIds;
@@ -414,6 +425,7 @@ export function subscribeToRecipes(
 // ── Checks ────────────────────────────────────────────────────────────────────
 
 export async function upsertCheck(householdId: string, check: CheckRecord): Promise<void> {
+  if (!throttleWrite(`upsertCheck-${check.id}`, 500)) return;
   const { error } = await supabase.from(TABLES.CHECKS).upsert({
     id: check.id,
     date: check.date,
@@ -473,6 +485,14 @@ export async function getChecksForDateRange(
 // ── Daily Logs ────────────────────────────────────────────────────────────────
 
 export async function upsertLog(householdId: string, log: DailyLog): Promise<void> {
+  if (!throttleWrite(`upsertLog-${householdId}`, 500)) throw new Error('잠시 후 다시 시도해주세요.');
+  log = { ...log, text: truncate(log.text, LIMITS.MAX_TEXT_LENGTH) };
+  // 새 로그 삽입 시 일일 제한 확인 (기존 로그 수정은 제한하지 않음)
+  const { data: existing } = await supabase.from(TABLES.LOGS).select('id').eq('id', log.id).maybeSingle();
+  if (!existing) {
+    const { count } = await supabase.from(TABLES.LOGS).select('id', { count: 'exact', head: true }).eq('household_id', householdId).eq('date', log.date);
+    if ((count ?? 0) >= LIMITS.MAX_LOGS_PER_DAY) throw new Error(`메모는 하루 최대 ${LIMITS.MAX_LOGS_PER_DAY}개까지 등록할 수 있습니다.`);
+  }
   const { error } = await supabase.from(TABLES.LOGS).upsert({
     id: log.id,
     date: log.date,
@@ -545,6 +565,9 @@ export async function uploadPhoto(
   localUri: string,
   path: string
 ): Promise<string> {
+  if (!throttleWrite(`uploadPhoto-${householdId}`, 3000)) throw new Error('잠시 후 다시 시도해주세요.');
+  // 경로 조작 방지
+  if (path.includes('..')) throw new Error('잘못된 파일 경로입니다.');
   const response = await fetch(localUri);
   const blob = await response.blob();
   const filePath = `households/${householdId}/${path}`;
