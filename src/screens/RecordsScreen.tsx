@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
-import { formatDisplayDate, getLast30Days, toDateKey } from '../utils/date';
+import { getLast30Days, toDateKey } from '../utils/date';
 import { getChecksForDateRange, getLogsForDateRange } from '../services/dbService';
 
 const TAG_OPTIONS = [
@@ -20,6 +20,17 @@ const TAG_OPTIONS = [
 ];
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MONTHS_KR = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+
+function shortDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+
+function formatDisplayDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = WEEKDAYS[d.getDay()];
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${day}요일`;
+}
 
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
@@ -103,6 +114,31 @@ export default function RecordsScreen() {
     }).sort((a, b) => b.localeCompare(a));
   }, [allChecks, allLogs, recipes, selectedCatFilter]);
 
+  // 타임라인 아이템: 이슈 날짜 + 그 사이 이슈없음 묶음
+  type TLItem =
+    | { type: 'issue'; date: string }
+    | { type: 'clean'; dates: string[] };
+
+  const timelineItems = useMemo<TLItem[]>(() => {
+    const issueSet = new Set(issueDates);
+    const last30 = getLast30Days(); // descending
+    const items: TLItem[] = [];
+    let cleanBuf: string[] = [];
+    for (const date of last30) {
+      if (issueSet.has(date)) {
+        if (cleanBuf.length > 0) {
+          items.push({ type: 'clean', dates: cleanBuf });
+          cleanBuf = [];
+        }
+        items.push({ type: 'issue', date });
+      } else {
+        cleanBuf.push(date);
+      }
+    }
+    if (cleanBuf.length > 0) items.push({ type: 'clean', dates: cleanBuf });
+    return items;
+  }, [issueDates]);
+
   // Logs indexed by date (one per day) — for calendar
   const logsByDate = useMemo(() => {
     const map: Record<string, typeof allLogs[0]> = {};
@@ -185,16 +221,29 @@ export default function RecordsScreen() {
             </View>
           </ScrollView>
 
-          {/* 예외 중심 타임라인 */}
           {issueDates.length === 0 && (
             <EmptyState
               emoji="✓"
               title="최근 30일 이슈 없음"
-              desc="미완료 루틴이나 메모가 없어요. 잘 돌보고 있어요!"
+              desc="미완료 루틴이나 메모가 없어요."
             />
           )}
 
-          {issueDates.map((date) => {
+          {timelineItems.map((item, idx) => {
+            if (item.type === 'clean') {
+              const { dates } = item;
+              const label = dates.length === 1
+                ? shortDate(dates[0])
+                : `${shortDate(dates[dates.length - 1])} ~ ${shortDate(dates[0])}`;
+              return (
+                <View key={`clean-${idx}`} style={styles.cleanRow}>
+                  <Text style={styles.cleanText}>{label}</Text>
+                  <Text style={styles.cleanMark}>이슈 없음 ✓</Text>
+                </View>
+              );
+            }
+
+            const { date } = item;
             const d = new Date(date + 'T00:00:00');
             const dayOfWeek = d.getDay();
 
@@ -208,32 +257,26 @@ export default function RecordsScreen() {
             recipes.forEach((r) => {
               if (!r.active) return;
               if (selectedCatFilter && !r.catIds.includes(selectedCatFilter)) return;
-              const scheduled = r.days.length === 0 || r.days.includes(dayOfWeek);
+              const scheduled = (r.days ?? []).length === 0 || (r.days ?? []).includes(dayOfWeek);
               if (!scheduled) return;
               r.catIds.forEach((catId) => {
                 if (selectedCatFilter && catId !== selectedCatFilter) return;
                 const done = r.times.some((t) => allChecks[`${date}_${r.id}_${catId}_${t}`]?.done);
                 if (!done) {
-                  const catName = cats.find((c) => c.id === catId)?.name ?? '';
-                  missedItems.push({ recipeName: r.name, catName });
+                  missedItems.push({ recipeName: r.name, catName: cats.find((c) => c.id === catId)?.name ?? '' });
                 }
               });
             });
-
-            if (dayLogs.length === 0 && missedItems.length === 0) return null;
 
             return (
               <View key={date} style={[styles.logEntry, shadow.sm]}>
                 <View style={styles.logDateHeader}>
                   <Text style={styles.logDateText}>{formatDisplayDate(date)}</Text>
                   {date === today && (
-                    <View style={styles.todayBadge}>
-                      <Text style={styles.todayBadgeText}>오늘</Text>
-                    </View>
+                    <View style={styles.todayBadge}><Text style={styles.todayBadgeText}>오늘</Text></View>
                   )}
                 </View>
                 <View style={styles.logContent}>
-                  {/* 메모 먼저 */}
                   {dayLogs.map((l) => (
                     <View key={l.id} style={styles.logMemoBlock}>
                       {l.tagColor && (
@@ -248,7 +291,6 @@ export default function RecordsScreen() {
                       <Text style={styles.logText}>{l.text}</Text>
                     </View>
                   ))}
-                  {/* 미완료 항목 */}
                   {missedItems.map((item, i) => (
                     <View key={i} style={styles.missedItem}>
                       <Text style={styles.missedMark}>✗</Text>
@@ -344,7 +386,7 @@ export default function RecordsScreen() {
           {selectedCalDate && (
             <View style={[styles.selectedLogCard, shadow.sm]}>
               <View style={styles.selectedLogHeader}>
-                <Text style={styles.selectedLogDate}>📅 {formatDisplayDate(selectedCalDate)}</Text>
+                <Text style={styles.selectedLogDate}>{formatDisplayDate(selectedCalDate)}</Text>
                 {selectedTagOption && (
                   <View style={[styles.logTagBadge, { backgroundColor: selectedTagOption.value + '20', borderColor: selectedTagOption.value }]}>
                     <View style={[styles.logTagDot, { backgroundColor: selectedTagOption.value }]} />
@@ -429,6 +471,12 @@ const styles = StyleSheet.create({
   logTagDot: { width: 8, height: 8, borderRadius: 4 },
   logTagText: { fontSize: 11, fontWeight: '600' },
   logText: { fontSize: 14, color: colors.charcoal, lineHeight: 22 },
+  cleanRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, paddingHorizontal: 4, marginBottom: 8,
+  },
+  cleanText: { fontSize: 12, color: colors.muted },
+  cleanMark: { fontSize: 12, fontWeight: '700', color: '#22C55E' },
   // Calendar styles
   calHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
