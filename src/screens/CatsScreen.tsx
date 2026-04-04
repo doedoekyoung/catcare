@@ -524,13 +524,11 @@ export default function CatsScreen() {
                 <View style={styles.expandPanel}>
                   <Text style={styles.expandSectionTitle}>루틴</Text>
                   {catRecipes.map((r) => (
-                    <TouchableOpacity
+                    <View
                       key={r.id}
                       style={[styles.routineItem, { borderLeftColor: tagColor }, !r.active && styles.recipeCardInactive]}
-                      onPress={() => openEditRecipe(r)}
-                      activeOpacity={0.75}
                     >
-                      <View style={styles.recipeInfo}>
+                      <TouchableOpacity style={styles.recipeInfo} onPress={() => openEditRecipe(r)} activeOpacity={0.75}>
                         <Text style={[styles.recipeName, !r.active && styles.recipeNameInactive]}>{r.name}</Text>
                         <View style={styles.recipeTimeTags}>
                           {r.times.map((t) => (
@@ -545,14 +543,14 @@ export default function CatsScreen() {
                             <Text style={styles.recipeMeta}>공유: {r.catIds.map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean).join(', ')}</Text>
                           )}
                         </View>
-                      </View>
+                      </TouchableOpacity>
                       <Switch
                         value={r.active}
                         onValueChange={() => handleToggleActive(r)}
                         thumbColor={r.active ? '#fff' : '#ccc'}
                         trackColor={{ false: colors.border, true: tagColor }}
                       />
-                    </TouchableOpacity>
+                    </View>
                   ))}
                   <TouchableOpacity style={styles.routineAddBtn} onPress={() => openAddRecipe(cat.id)}>
                     <Text style={styles.routineAddText}>+ 루틴 추가</Text>
