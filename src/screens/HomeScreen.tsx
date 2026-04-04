@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: radius.md,
     backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
   },
-  catTabScroll: { borderBottomWidth: 1, borderBottomColor: colors.border, flexShrink: 0 },
+  catTabScroll: { borderBottomWidth: 1, borderBottomColor: colors.border, flexShrink: 0, flexGrow: 0 },
   catTabBar: { flexDirection: 'row', paddingHorizontal: 16 },
   catTab: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
