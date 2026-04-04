@@ -141,7 +141,11 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
           {title && <Text style={styles.sheetTitle}>{title}</Text>}
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: spacing.lg }}
+          >
             {children}
           </ScrollView>
         </View>
@@ -159,7 +163,11 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.sheetHandle} />
           {title && <Text style={styles.sheetTitle}>{title}</Text>}
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: spacing.lg }}
+          >
             {children}
           </ScrollView>
         </Pressable>
@@ -277,7 +285,7 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: colors.warmWhite, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl,
-    padding: spacing.lg, paddingBottom: 40, maxHeight: '85%',
+    padding: spacing.lg, maxHeight: '85%',
     width: '100%', maxWidth: 430,
   },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.lg },
