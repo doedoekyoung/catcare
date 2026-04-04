@@ -71,12 +71,14 @@ export default function HomeScreen() {
   const [logText, setLogText] = useState('');
   const [logTagColor, setLogTagColor] = useState<string | null>(null);
   const [logCatId, setLogCatId] = useState<string | null>(null);
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [refreshing] = useState(false);
 
   const today = toDateKey();
   const activeRecipes = selectActiveRecipesForCats(recipes, selectedCatIds, today);
   const { done, total, pct } = selectCompletionRate(recipes, checks, today, selectedCatIds);
-  const todayLog = logs.find((l) => l.date === today);
+  const todayLogs = logs.filter((l) => l.date === today);
+  const canAddLog = todayLogs.length < 5;
 
   // 시간대별 그룹 — 복수 시간대 지원
   const grouped: Record<TimeSlot, Recipe[]> = { morning: [], lunch: [], evening: [] };
@@ -109,7 +111,7 @@ export default function HomeScreen() {
 
   const handleSaveLog = async () => {
     if (!logText.trim() || !household || !user) return;
-    const existing = logs.find((l) => l.date === today);
+    const existing = editingLogId ? logs.find((l) => l.id === editingLogId) : null;
     const log = {
       id: existing?.id ?? crypto.randomUUID(),
       date: today, text: logText.trim(),
@@ -121,18 +123,29 @@ export default function HomeScreen() {
     };
     try {
       await upsertLog(household.id, log);
-      setLogs(logs.map((l) => l.id === log.id ? log : l).concat(existing ? [] : [log]));
+      setLogs(existing
+        ? logs.map((l) => l.id === log.id ? log : l)
+        : [...logs, log]);
       setLogModalVisible(false);
       setLogText('');
+      setEditingLogId(null);
     } catch (e: any) {
       if (typeof window !== 'undefined') window.alert(`저장 실패: ${e?.message ?? ''}`);
     }
   };
 
-  const openLogModal = () => {
-    setLogText(todayLog?.text ?? '');
-    setLogTagColor(todayLog?.tagColor ?? null);
-    setLogCatId(todayLog?.catId ?? null);
+  const openLogModal = (logToEdit?: typeof logs[0]) => {
+    if (logToEdit) {
+      setEditingLogId(logToEdit.id);
+      setLogText(logToEdit.text);
+      setLogTagColor(logToEdit.tagColor ?? null);
+      setLogCatId(logToEdit.catId ?? null);
+    } else {
+      setEditingLogId(null);
+      setLogText('');
+      setLogTagColor(null);
+      setLogCatId(null);
+    }
     setLogModalVisible(true);
   };
 
@@ -146,7 +159,7 @@ export default function HomeScreen() {
               <Text style={styles.doneBadgeText}>{done} / {total}</Text>
             </View>
           )}
-          <TouchableOpacity testID="home-log-button" style={styles.logBtn} onPress={openLogModal}>
+          <TouchableOpacity testID="home-log-button" style={[styles.logBtn, !canAddLog && { opacity: 0.4 }]} onPress={() => canAddLog && openLogModal()} disabled={!canAddLog}>
             <Text style={{ fontSize: 16 }}>✏</Text>
           </TouchableOpacity>
         </View>
@@ -269,37 +282,54 @@ export default function HomeScreen() {
           </Card>
         )}
 
-        {/* Today log — 고양이 등록 후에만 표시 */}
+        {/* Today logs — 고양이 등록 후에만 표시 */}
         {cats.length > 0 && (
           <>
             <SectionTitle title="오늘의 메모" style={{ marginTop: 8 }} />
-            {todayLog ? (
-              <Card>
-                {todayLog.tagColor && (
-                  <View style={[styles.logTagBadge, { backgroundColor: todayLog.tagColor + '20', borderColor: todayLog.tagColor }]}>
-                    <View style={[styles.logTagDot, { backgroundColor: todayLog.tagColor }]} />
-                    <Text style={[styles.logTagText, { color: todayLog.tagColor }]}>
-                      {TAG_OPTIONS.find((t) => t.value === todayLog.tagColor)?.label ?? ''}
-                      {todayLog.catId ? ` · ${cats.find((c) => c.id === todayLog.catId)?.name ?? ''}` : ''}
-                    </Text>
-                  </View>
+            {todayLogs.length > 0 ? (
+              <>
+                {todayLogs.map((log) => {
+                  const logCat = log.catId ? cats.find((c) => c.id === log.catId) : null;
+                  return (
+                    <Card key={log.id} style={{ marginBottom: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                        {log.tagColor && (
+                          <View style={[styles.logTagBadge, { backgroundColor: log.tagColor + '20', borderColor: log.tagColor, marginBottom: 0 }]}>
+                            <View style={[styles.logTagDot, { backgroundColor: log.tagColor }]} />
+                            <Text style={[styles.logTagText, { color: log.tagColor }]}>
+                              {TAG_OPTIONS.find((t) => t.value === log.tagColor)?.label ?? ''}
+                            </Text>
+                          </View>
+                        )}
+                        {logCat && (
+                          <View style={[styles.logTagBadge, { backgroundColor: (logCat.tagColor ?? colors.caramel) + '20', borderColor: logCat.tagColor ?? colors.caramel, marginBottom: 0 }]}>
+                            <View style={[styles.logTagDot, { backgroundColor: logCat.tagColor ?? colors.caramel }]} />
+                            <Text style={[styles.logTagText, { color: logCat.tagColor ?? colors.caramel }]}>{logCat.name}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.logText}>{log.text}</Text>
+                      <Button label="수정" variant="ghost" size="sm" onPress={() => openLogModal(log)} />
+                    </Card>
+                  );
+                })}
+                {canAddLog && (
+                  <Button label="+ 메모 추가" variant="secondary" size="sm" onPress={() => openLogModal()} style={{ marginTop: 4 }} />
                 )}
-                <Text style={styles.logText}>{todayLog.text}</Text>
-                <Button label="수정" variant="ghost" size="sm" onPress={openLogModal} />
-              </Card>
+              </>
             ) : (
               <Card style={{ backgroundColor: colors.cream }}>
                 <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 10, textAlign: 'center' }}>
                   오늘의 특이사항을 기록해보세요
                 </Text>
-                <Button label="메모 추가" variant="secondary" size="sm" onPress={openLogModal} />
+                <Button label="메모 추가" variant="secondary" size="sm" onPress={() => openLogModal()} />
               </Card>
             )}
           </>
         )}
       </ScrollView>
 
-      <BottomSheet visible={logModalVisible} onClose={() => setLogModalVisible(false)} title="오늘의 기록">
+      <BottomSheet visible={logModalVisible} onClose={() => { setLogModalVisible(false); setEditingLogId(null); }} title={editingLogId ? '메모 수정' : '메모 추가'}>
         {cats.length > 0 && (
           <View style={styles.catSelectRow}>
             <Text style={styles.tagLabel}>고양이</Text>

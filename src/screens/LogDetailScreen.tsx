@@ -40,6 +40,7 @@ export default function LogDetailScreen() {
   const [memoText, setMemoText] = useState('');
   const [logModal, setLogModal] = useState(false);
   const [logText, setLogText] = useState('');
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
 
   // ── Memo per check item (REQ-V4-03) ──────────────────────────────────────
@@ -63,15 +64,21 @@ export default function LogDetailScreen() {
   // ── Daily log text ────────────────────────────────────────────────────────
 
   const openLogModal = (existing?: DailyLog) => {
-    setLogText(existing?.text ?? '');
+    if (existing) {
+      setEditingLogId(existing.id);
+      setLogText(existing.text);
+    } else {
+      setEditingLogId(null);
+      setLogText('');
+    }
     setLogModal(true);
   };
 
   const handleSaveLog = async () => {
     if (!logText.trim() || !household || !user) return;
-    const existing = dayLogs[0];
+    const existing = editingLogId ? dayLogs.find((l) => l.id === editingLogId) : null;
     const log: DailyLog = {
-      id: existing?.id ?? `${date}_${user.uid}`,
+      id: existing?.id ?? crypto.randomUUID(),
       date,
       text: logText.trim(),
       householdId: household.id,
@@ -81,9 +88,11 @@ export default function LogDetailScreen() {
       photoUri: existing?.photoUri,
     };
     await upsertLog(household.id, log);
-    setLogs(logs.map((l) => l.id === log.id ? log : l)
-      .concat(existing ? [] : [log]));
+    setLogs(existing
+      ? logs.map((l) => l.id === log.id ? log : l)
+      : [...logs, log]);
     setLogModal(false);
+    setEditingLogId(null);
   };
 
   const handleDeleteLog = (log: DailyLog) => {

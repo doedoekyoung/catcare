@@ -140,10 +140,13 @@ export default function RecordsScreen() {
     return items;
   }, [issueDates, today]);
 
-  // Logs indexed by date (one per day) — for calendar
+  // Logs indexed by date (multiple per day) — for calendar
   const logsByDate = useMemo(() => {
-    const map: Record<string, typeof allLogs[0]> = {};
-    allLogs.forEach((l) => { map[l.date] = l; });
+    const map: Record<string, typeof allLogs> = {};
+    allLogs.forEach((l) => {
+      if (!map[l.date]) map[l.date] = [];
+      map[l.date].push(l);
+    });
     return map;
   }, [allLogs]);
 
@@ -169,10 +172,7 @@ export default function RecordsScreen() {
     else setCalMonth((m) => m + 1);
   };
 
-  const selectedLog = selectedCalDate ? logsByDate[selectedCalDate] : null;
-  const selectedTagOption = selectedLog?.tagColor
-    ? TAG_OPTIONS.find((t) => t.value === selectedLog.tagColor)
-    : null;
+  const selectedLogs = selectedCalDate ? (logsByDate[selectedCalDate] ?? []) : [];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -282,21 +282,23 @@ export default function RecordsScreen() {
                     <Text style={styles.cleanDayText}>이상없음</Text>
                   )}
                   {dayLogs.map((l) => {
-                    const isWarn = ['#EF4444','#F97316','#EAB308'].includes(l.tagColor ?? '');
                     const tagLabel = TAG_OPTIONS.find((t) => t.value === l.tagColor)?.label ?? '';
-                    const catName = l.catId ? cats.find((c) => c.id === l.catId)?.name ?? '' : '';
-                    if (!isWarn) {
-                      return (
-                        <Text key={l.id} style={styles.cleanDayText}>이상없음</Text>
-                      );
-                    }
+                    const logCat = l.catId ? cats.find((c) => c.id === l.catId) : null;
                     return (
                       <View key={l.id} style={styles.logMemoBlock}>
-                        <View style={[styles.logTagBadge, { backgroundColor: l.tagColor! + '20', borderColor: l.tagColor! }]}>
-                          <View style={[styles.logTagDot, { backgroundColor: l.tagColor! }]} />
-                          <Text style={[styles.logTagText, { color: l.tagColor! }]}>
-                            {tagLabel}{catName ? ` · ${catName}` : ''}
-                          </Text>
+                        <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', marginBottom: 2 }}>
+                          {l.tagColor && (
+                            <View style={[styles.logTagBadge, { backgroundColor: l.tagColor + '20', borderColor: l.tagColor }]}>
+                              <View style={[styles.logTagDot, { backgroundColor: l.tagColor }]} />
+                              <Text style={[styles.logTagText, { color: l.tagColor }]}>{tagLabel}</Text>
+                            </View>
+                          )}
+                          {logCat && (
+                            <View style={[styles.logTagBadge, { backgroundColor: (logCat.tagColor ?? colors.caramel) + '20', borderColor: logCat.tagColor ?? colors.caramel }]}>
+                              <View style={[styles.logTagDot, { backgroundColor: logCat.tagColor ?? colors.caramel }]} />
+                              <Text style={[styles.logTagText, { color: logCat.tagColor ?? colors.caramel }]}>{logCat.name}</Text>
+                            </View>
+                          )}
                         </View>
                         <Text style={styles.logText}>{l.text}</Text>
                       </View>
@@ -360,10 +362,9 @@ export default function RecordsScreen() {
                 return <View key={`empty-${idx}`} style={styles.calCell} />;
               }
               const dateKey = toCalKey(calYear, calMonth, day);
-              const log = logsByDate[dateKey];
+              const dateLogs = logsByDate[dateKey] ?? [];
               const isToday = dateKey === today;
               const isSelected = dateKey === selectedCalDate;
-              const dotColor = log?.tagColor ?? (log ? colors.caramel : null);
               const dayOfWeek = (getFirstDayOfWeek(calYear, calMonth) + day - 1) % 7;
 
               return (
@@ -375,7 +376,7 @@ export default function RecordsScreen() {
                     isToday && styles.calCellToday,
                   ]}
                   onPress={() => setSelectedCalDate(isSelected ? null : dateKey)}
-                  activeOpacity={log ? 0.7 : 1}
+                  activeOpacity={dateLogs.length > 0 ? 0.7 : 1}
                 >
                   <Text style={[
                     styles.calDayNum,
@@ -385,28 +386,48 @@ export default function RecordsScreen() {
                   ]}>
                     {day}
                   </Text>
-                  {dotColor && (
-                    <View style={[styles.calDot, { backgroundColor: dotColor }]} />
+                  {dateLogs.length > 0 && (
+                    <View style={{ flexDirection: 'row', gap: 2, justifyContent: 'center' }}>
+                      {dateLogs.slice(0, 3).map((log) => (
+                        <View key={log.id} style={[styles.calDot, { backgroundColor: log.tagColor ?? colors.caramel }]} />
+                      ))}
+                    </View>
                   )}
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          {/* Selected day log */}
+          {/* Selected day logs */}
           {selectedCalDate && (
             <View style={[styles.selectedLogCard, shadow.sm]}>
               <View style={styles.selectedLogHeader}>
                 <Text style={styles.selectedLogDate}>{formatDisplayDate(selectedCalDate)}</Text>
-                {selectedTagOption && (
-                  <View style={[styles.logTagBadge, { backgroundColor: selectedTagOption.value + '20', borderColor: selectedTagOption.value }]}>
-                    <View style={[styles.logTagDot, { backgroundColor: selectedTagOption.value }]} />
-                    <Text style={[styles.logTagText, { color: selectedTagOption.value }]}>{selectedTagOption.label}</Text>
-                  </View>
-                )}
               </View>
-              {selectedLog ? (
-                <Text style={styles.selectedLogText}>{selectedLog.text}</Text>
+              {selectedLogs.length > 0 ? (
+                selectedLogs.map((log) => {
+                  const tagOption = log.tagColor ? TAG_OPTIONS.find((t) => t.value === log.tagColor) : null;
+                  const logCat = log.catId ? cats.find((c) => c.id === log.catId) : null;
+                  return (
+                    <View key={log.id} style={selectedLogs.length > 1 ? { marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f0e8df' } : undefined}>
+                      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                        {tagOption && (
+                          <View style={[styles.logTagBadge, { backgroundColor: tagOption.value + '20', borderColor: tagOption.value }]}>
+                            <View style={[styles.logTagDot, { backgroundColor: tagOption.value }]} />
+                            <Text style={[styles.logTagText, { color: tagOption.value }]}>{tagOption.label}</Text>
+                          </View>
+                        )}
+                        {logCat && (
+                          <View style={[styles.logTagBadge, { backgroundColor: (logCat.tagColor ?? colors.caramel) + '20', borderColor: logCat.tagColor ?? colors.caramel }]}>
+                            <View style={[styles.logTagDot, { backgroundColor: logCat.tagColor ?? colors.caramel }]} />
+                            <Text style={[styles.logTagText, { color: logCat.tagColor ?? colors.caramel }]}>{logCat.name}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.selectedLogText}>{log.text}</Text>
+                    </View>
+                  );
+                })
               ) : (
                 <Text style={styles.selectedLogEmpty}>이 날의 메모가 없어요</Text>
               )}

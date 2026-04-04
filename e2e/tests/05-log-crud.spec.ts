@@ -23,7 +23,7 @@ test.describe.serial('Log CRUD', () => {
     await ensureLoggedIn(page);
 
     await page.getByTestId(sel.homeLogButton).click();
-    await expect(page.getByText('오늘의 기록')).toBeVisible();
+    await expect(page.getByTestId(sel.logFormTextInput)).toBeVisible();
 
     await page.getByTestId(sel.logFormTextInput).fill(TEST_LOG.text);
     await page.getByTestId(sel.logFormSaveButton).click();
@@ -42,7 +42,7 @@ test.describe.serial('Log CRUD', () => {
     // 기존 메모의 "수정" 버튼 클릭
     await expect(page.getByText(TEST_LOG.text)).toBeVisible({ timeout: 10_000 });
     await page.getByText('수정', { exact: true }).click();
-    await expect(page.getByText('오늘의 기록')).toBeVisible();
+    await expect(page.getByTestId(sel.logFormTextInput)).toBeVisible();
 
     const input = page.getByTestId(sel.logFormTextInput);
     await expect(input).toHaveValue(TEST_LOG.text);
