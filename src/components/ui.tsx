@@ -1,7 +1,7 @@
 // src/components/ui.tsx
 // Shared UI primitives used across all screens
 
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -138,25 +138,18 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, spacing.md);
   const maxSheetHeight = Dimensions.get('window').height * 0.88;
+  const dragStartY = useRef<number | null>(null);
 
-  const sheetContent = (
-    <>
-      <View style={styles.sheetHandle} />
-      {title && <Text style={styles.sheetTitle}>{title}</Text>}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: bottomPad }}
-      >
-        {children}
-      </ScrollView>
-    </>
-  );
+  // 스와이프 다운 감지 (핸들 영역에서 50px 이상 아래로)
+  const onDragStart = useCallback((y: number) => { dragStartY.current = y; }, []);
+  const onDragEnd = useCallback((y: number) => {
+    if (dragStartY.current !== null && y - dragStartY.current > 50) onClose();
+    dragStartY.current = null;
+  }, [onClose]);
 
   if (Platform.OS === 'web') {
     if (!visible) return null;
     const { createPortal } = require('react-dom');
-    // Pressable 대신 native onClick 사용 — portal된 DOM에서 RN 이벤트가 불안정함
     return createPortal(
       <div
         onClick={onClose}
@@ -169,7 +162,7 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
         }}
       >
         <div
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e: any) => e.stopPropagation()}
           style={{
             width: '100%', maxWidth: 430,
             maxHeight: maxSheetHeight,
@@ -177,13 +170,25 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
             borderTopLeftRadius: 24, borderTopRightRadius: 24,
             padding: 20,
             display: 'flex', flexDirection: 'column',
-            overflowY: 'auto',
-            boxSizing: 'border-box',
+            boxSizing: 'border-box' as const,
           }}
         >
-          {/* handle */}
-          <div style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2D5C8', alignSelf: 'center', margin: '0 auto 20px' }} />
-          {title && <div style={{ fontSize: 20, fontWeight: '700', color: '#2C2420', marginBottom: 20 }}>{title}</div>}
+          {/* 핸들 — 탭으로 닫기 + 스와이프 다운 */}
+          <div
+            onClick={onClose}
+            onTouchStart={(e: any) => onDragStart(e.touches[0].clientY)}
+            onTouchEnd={(e: any) => onDragEnd(e.changedTouches[0].clientY)}
+            onMouseDown={(e: any) => onDragStart(e.clientY)}
+            onMouseUp={(e: any) => onDragEnd(e.clientY)}
+            style={{
+              padding: '8px 0 12px', cursor: 'pointer',
+              display: 'flex', justifyContent: 'center',
+              touchAction: 'none',
+            }}
+          >
+            <div style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2D5C8' }} />
+          </div>
+          {title && <div style={{ fontSize: 20, fontWeight: 700, color: '#2C2420', marginBottom: 20 }}>{title}</div>}
           <div style={{ flex: 1, overflowY: 'auto', paddingBottom: bottomPad }}>
             {children}
           </div>
@@ -192,16 +197,27 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
       document.body
     );
   }
+
+  // 네이티브 (Modal)
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={[styles.sheet, { maxHeight: maxSheetHeight }]} onPress={() => {}}>
-          {sheetContent}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onClose}
+            style={{ padding: 8, alignItems: 'center' }}
+          >
+            <View style={styles.sheetHandle} />
+          </TouchableOpacity>
+          {title && <Text style={styles.sheetTitle}>{title}</Text>}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: bottomPad }}
+          >
+            {children}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
