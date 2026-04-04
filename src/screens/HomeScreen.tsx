@@ -1,16 +1,16 @@
 // src/screens/HomeScreen.tsx
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore, selectActiveRecipesForCats, selectCompletionRate } from '../store/useStore';
-import { upsertCheck, upsertLog } from '../services/dbService';
+import { upsertCheck, upsertLog, getChecksForDateRange } from '../services/dbService';
 import { Card, SectionTitle, EmptyState, BottomSheet, Input, Button } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
-import { toDateKey, formatDisplayDate } from '../utils/date';
+import { toDateKey, formatDisplayDate, getLast30Days } from '../utils/date';
 import type { CheckRecord, Recipe, TimeSlot } from '../types';
 
 const TAG_OPTIONS = [
@@ -31,9 +31,41 @@ const TIME_SLOTS: TimeSlot[] = ['morning', 'lunch', 'evening'];
 export default function HomeScreen() {
   const {
     cats, recipes, checks, logs, selectedCatIds, user, household,
-    toggleCatSelection, toggleCheck, setLogs,
+    setSelectedCatIds, toggleCheck, setLogs,
   } = useStore();
 
+  // 고양이 단일 선택
+  const activeCatId: string | null = selectedCatIds.length === 1 ? selectedCatIds[0] : null;
+  const selectCat = (catId: string | null) => {
+    setSelectedCatIds(catId ? [catId] : cats.map((c) => c.id));
+  };
+
+  // 7일 완료율 계산용
+  const [historyChecks, setHistoryChecks] = useState<CheckRecord[]>([]);
+  useEffect(() => {
+    if (!household?.id) return;
+    const days = getLast30Days();
+    getChecksForDateRange(household.id, days[days.length - 7], days[days.length - 1])
+      .then(setHistoryChecks).catch(() => {});
+  }, [household?.id]);
+
+  const getCatRate = useCallback((catId: string): number => {
+    const catRecipes = recipes.filter((r) => r.active && r.catIds.includes(catId));
+    let total = 0; let done = 0;
+    const days = getLast30Days().slice(-7);
+    days.forEach((date) => {
+      const dow = new Date(date + 'T00:00:00').getDay();
+      catRecipes.forEach((r) => {
+        const scheduled = (r.days ?? []).length === 0 || (r.days ?? []).includes(dow);
+        if (!scheduled) return;
+        r.times.forEach((t) => {
+          total++;
+          if (historyChecks.some((c) => c.id === `${date}_${r.id}_${catId}_${t}` && c.done)) done++;
+        });
+      });
+    });
+    return total === 0 ? 100 : Math.round((done / total) * 100);
+  }, [recipes, historyChecks]);
 
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logText, setLogText] = useState('');
@@ -123,32 +155,27 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} tintColor={colors.caramel} />}
-      >
-        {/* Cat selector chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-          <View style={styles.chips}>
+      {/* 고양이 탭바 */}
+      {cats.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catTabScroll}>
+          <View style={styles.catTabBar}>
+            <TouchableOpacity
+              style={[styles.catTab, activeCatId === null && styles.catTabActive]}
+              onPress={() => selectCat(null)}
+            >
+              <Text style={[styles.catTabText, activeCatId === null && styles.catTabTextActive]}>전체</Text>
+            </TouchableOpacity>
             {cats.map((cat) => {
-              const sel = selectedCatIds.includes(cat.id);
               const tagColor = cat.tagColor ?? colors.caramel;
+              const isActive = activeCatId === cat.id;
               return (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[
-                    styles.chip,
-                    { borderColor: tagColor },
-                    sel ? { backgroundColor: tagColor } : { backgroundColor: tagColor + '15' },
-                  ]}
-                  onPress={() => toggleCatSelection(cat.id)}
+                  style={[styles.catTab, isActive && { borderBottomColor: tagColor }]}
+                  onPress={() => selectCat(cat.id)}
                 >
-                  <Text style={[styles.chipInitial, { color: sel ? '#fff' : tagColor }]}>
-                    {cat.name.charAt(0)}
-                  </Text>
-                  <Text style={[styles.chipText, { color: sel ? '#fff' : tagColor }]}>
+                  <View style={[styles.catTabDot, { backgroundColor: tagColor }]} />
+                  <Text style={[styles.catTabText, isActive && { color: tagColor, fontWeight: '700' }]}>
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
@@ -156,6 +183,31 @@ export default function HomeScreen() {
             })}
           </View>
         </ScrollView>
+      )}
+
+      {/* 선택된 고양이 퀵인포 */}
+      {activeCatId && (() => {
+        const rate = getCatRate(activeCatId);
+        const rateColor = rate >= 80 ? '#22C55E' : '#EF4444';
+        return (
+          <View style={styles.catQuickBar}>
+            <Text style={styles.catQuickText}>
+              오늘 <Text style={{ fontWeight: '700', color: colors.caramel }}>{done}/{total}</Text> 완료
+            </Text>
+            <Text style={styles.catQuickDivider}>·</Text>
+            <Text style={styles.catQuickText}>
+              7일 완료율 <Text style={{ fontWeight: '700', color: rateColor }}>{rate}%</Text>
+            </Text>
+          </View>
+        );
+      })()}
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} tintColor={colors.caramel} />}
+      >
 
         {cats.length === 0 && (
           <EmptyState
@@ -335,17 +387,26 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: radius.md,
     backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
   },
+  catTabScroll: { borderBottomWidth: 1.5, borderBottomColor: colors.border, flexShrink: 0 },
+  catTabBar: { flexDirection: 'row', paddingHorizontal: spacing.lg },
+  catTab: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingVertical: 10, paddingHorizontal: 2, marginRight: 18,
+    borderBottomWidth: 2, borderBottomColor: 'transparent',
+  },
+  catTabActive: { borderBottomColor: colors.caramel },
+  catTabDot: { width: 6, height: 6, borderRadius: 3 },
+  catTabText: { fontSize: 13, fontWeight: '500', color: colors.muted },
+  catTabTextActive: { color: colors.caramel, fontWeight: '700' },
+  catQuickBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: spacing.lg, paddingVertical: 8,
+    backgroundColor: colors.cream, borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  catQuickText: { fontSize: 12, color: colors.brownMid },
+  catQuickDivider: { fontSize: 12, color: colors.border },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: 80 },
-  chipsScroll: { marginBottom: spacing.lg, marginHorizontal: -spacing.lg },
-  chips: { flexDirection: 'row', gap: 8, paddingHorizontal: spacing.lg },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 8, paddingHorizontal: 14,
-    borderRadius: radius.full, borderWidth: 1.5,
-  },
-  chipInitial: { fontSize: 14, fontWeight: '700', width: 20, textAlign: 'center' },
-  chipText: { fontSize: 13, fontWeight: '500' },
   section: { marginBottom: spacing.lg },
   checkItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

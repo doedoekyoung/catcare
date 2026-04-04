@@ -276,7 +276,8 @@ export default function CatsScreen() {
   const [editingCat, setEditingCat] = useState<Cat | null>(null);
   const [catName, setCatName] = useState('');
   const [catPhotoUri, setCatPhotoUri] = useState('');
-  const [catGender, setCatGender] = useState<'male' | 'female' | 'neutered' | ''>('');
+  const [catGender, setCatGender] = useState<'male' | 'female' | ''>('');
+  const [catNeutered, setCatNeutered] = useState(false);
   const [catTagColor, setCatTagColor] = useState<string>(CAT_TAG_COLORS[0]);
   const [catBirthYear, setCatBirthYear] = useState<number | null>(null);
   const [catBirthMonth, setCatBirthMonth] = useState<number | null>(null);
@@ -306,7 +307,7 @@ export default function CatsScreen() {
 
   const openAddCat = () => {
     setEditingCat(null);
-    setCatName(''); setCatPhotoUri(''); setCatGender('');
+    setCatName(''); setCatPhotoUri(''); setCatGender(''); setCatNeutered(false);
     setCatTagColor(CAT_TAG_COLORS[0]);
     setCatBirthYear(null); setCatBirthMonth(null); setCatBirthDay(null);
     setCatNotes('');
@@ -317,7 +318,8 @@ export default function CatsScreen() {
     setEditingCat(cat);
     setCatName(cat.name);
     setCatPhotoUri(cat.photoUri ?? '');
-    setCatGender((cat.gender as 'male' | 'female' | 'neutered' | '') ?? '');
+    setCatGender(cat.gender === 'male' ? 'male' : cat.gender === 'female' ? 'female' : '');
+    setCatNeutered(cat.gender === 'neutered');
     setCatTagColor(cat.tagColor ?? CAT_TAG_COLORS[0]);
     setCatBirthYear(cat.birthYear ?? null);
     setCatBirthMonth(cat.birthMonth ?? null);
@@ -331,7 +333,7 @@ export default function CatsScreen() {
     const catData: Partial<Cat> = {
       name: catName.trim(),
       photoUri: catPhotoUri || undefined,
-      gender: catGender || undefined,
+      gender: catGender || undefined,  // 중성화는 별도 저장 없이 UI 표기만
       tagColor: catTagColor,
       birthYear: catBirthYear ?? undefined,
       birthMonth: catBirthMonth ?? undefined,
@@ -493,9 +495,7 @@ export default function CatsScreen() {
           const catRecipes = recipes.filter((r) => r.catIds.includes(cat.id));
           const tagColor = cat.tagColor ?? colors.caramel;
           const isExpanded = expandedCatId === cat.id;
-          const rate = getCompletionRate(cat);
-          const rateColor = rate >= 80 ? '#22C55E' : '#EF4444';
-          const genderLabel = cat.gender === 'male' ? '남아' : cat.gender === 'female' ? '여아' : cat.gender === 'neutered' ? '중성화' : '';
+          const genderLabel = cat.gender === 'male' ? '남아' : cat.gender === 'female' ? '여아' : '';
           const metaParts = [genderLabel, cat.birthYear ? `${cat.birthYear}년생` : '', `루틴 ${catRecipes.length}개`].filter(Boolean);
 
           return (
@@ -515,10 +515,6 @@ export default function CatsScreen() {
                     <View style={[styles.tagDot, { backgroundColor: tagColor }]} />
                   </View>
                   <Text style={styles.catMeta}>{metaParts.join(' · ')}</Text>
-                </View>
-                <View style={[styles.completionPill, { backgroundColor: rateColor + '18' }]}>
-                  <View style={[styles.completionDot, { backgroundColor: rateColor }]} />
-                  <Text style={[styles.completionText, { color: rateColor }]}>7일 {rate}%</Text>
                 </View>
                 <Text style={styles.expandArrow}>{isExpanded ? '▲' : '▼'}</Text>
                 <TouchableOpacity style={styles.iconBtn} onPress={(e) => { e.stopPropagation?.(); openEditCat(cat); }}>
@@ -614,20 +610,31 @@ export default function CatsScreen() {
           />
 
           {/* 성별 */}
-          <Text style={styles.fieldLabel}>성별</Text>
+          <Text style={styles.fieldLabel}>성별 *</Text>
           <View style={styles.optionRow}>
-            {GENDER_OPTIONS.map((g) => (
-              <TouchableOpacity
-                key={g.value}
-                style={[styles.optionChip, catGender === g.value && styles.optionChipSel]}
-                onPress={() => setCatGender(g.value)}
-              >
-                <Text style={[styles.optionText, catGender === g.value && styles.optionTextSel]}>
-                  {g.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity
+              style={[styles.optionChip, catGender === 'male' && styles.optionChipSel]}
+              onPress={() => setCatGender('male')}
+            >
+              <Text style={[styles.optionText, catGender === 'male' && styles.optionTextSel]}>남아</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.optionChip, catGender === 'female' && styles.optionChipSel]}
+              onPress={() => setCatGender('female')}
+            >
+              <Text style={[styles.optionText, catGender === 'female' && styles.optionTextSel]}>여아</Text>
+            </TouchableOpacity>
           </View>
+          {!!catGender && (
+            <View style={{ marginBottom: spacing.md, marginTop: -8 }}>
+              <TouchableOpacity
+                style={[styles.optionChip, catNeutered && styles.optionChipSel]}
+                onPress={() => setCatNeutered((v) => !v)}
+              >
+                <Text style={[styles.optionText, catNeutered && styles.optionTextSel]}>+ 중성화</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* 생년월일 — 드롭다운 (웹) / 스크롤 피커 (네이티브) */}
           <Text style={styles.fieldLabel}>생년월일/만난 날</Text>
@@ -692,7 +699,7 @@ export default function CatsScreen() {
               style={styles.deleteRecipeBtn}
               onPress={() => { setCatModal(false); setTimeout(() => handleDeleteCat(editingCat), 300); }}
             >
-              <Text style={styles.deleteRecipeBtnText}>정보 삭제</Text>
+              <Text style={styles.deleteCatBtnText}>정보 삭제</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -959,6 +966,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center', marginTop: spacing.md, paddingVertical: 6,
   },
   deleteRecipeBtnText: { fontSize: 13, color: '#EF4444' },
+  deleteCatBtnText: { fontSize: 13, color: colors.border },
 
   // 7-day history (unused, kept for safety)
   historyWrap: {
