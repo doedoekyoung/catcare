@@ -521,14 +521,9 @@ export default function CatsScreen() {
                   <Text style={[styles.completionText, { color: rateColor }]}>7일 {rate}%</Text>
                 </View>
                 <Text style={styles.expandArrow}>{isExpanded ? '▲' : '▼'}</Text>
-                <View style={styles.catActions}>
-                  <TouchableOpacity style={styles.iconBtn} onPress={(e) => { e.stopPropagation?.(); openEditCat(cat); }}>
-                    <Text style={styles.iconBtnText}>편집</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.dangerBg }]} onPress={(e) => { e.stopPropagation?.(); handleDeleteCat(cat); }}>
-                    <Text style={[styles.iconBtnText, { color: '#EF4444' }]}>삭제</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={styles.iconBtn} onPress={(e) => { e.stopPropagation?.(); openEditCat(cat); }}>
+                  <Text style={styles.iconBtnText}>편집</Text>
+                </TouchableOpacity>
               </TouchableOpacity>
 
               {/* Expand panel — routines only */}
@@ -691,6 +686,15 @@ export default function CatsScreen() {
           <View style={[styles.row, { marginTop: spacing.md }]}>
             <Button label="취소" variant="secondary" onPress={() => setCatModal(false)} style={{ flex: 1 }} />
             <Button label={editingCat ? '수정' : '등록'} onPress={handleSaveCat} style={{ flex: 1 }} />
+          </View>
+          {editingCat && (
+            <TouchableOpacity
+              style={styles.deleteRecipeBtn}
+              onPress={() => { setCatModal(false); setTimeout(() => handleDeleteCat(editingCat), 300); }}
+            >
+              <Text style={styles.deleteRecipeBtnText}>이 고양이 삭제</Text>
+            </TouchableOpacity>
+          )}
           </View>
         </ScrollView>
       </BottomSheet>

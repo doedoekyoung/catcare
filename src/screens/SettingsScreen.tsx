@@ -190,7 +190,7 @@ export default function SettingsScreen() {
       disabled={!onPress}
       activeOpacity={onPress ? 0.7 : 1}
     >
-      <Text style={styles.rowIcon}>{icon}</Text>
+      {!!icon && <Text style={styles.rowIcon}>{icon}</Text>}
       <View style={styles.rowInfo}>
         <Text style={styles.rowLabel}>{label}</Text>
         {value && <Text style={styles.rowValue}>{value}</Text>}
@@ -208,48 +208,16 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
         {/* Profile */}
-        {settingSection('👤 프로필', <>
-          {settingRow('🐱', '이름', user?.displayName ?? '-', () => {
+        {settingSection('프로필', <>
+          {settingRow('', '이름', user?.displayName ?? '-', () => {
             setNameInput(user?.displayName ?? '');
             setNameEditVisible(true);
           })}
-          {settingRow('📧', '이메일', user?.email ?? '-')}
-        </>)}
-
-        {/* Share / Handover (REQ-V1-03~05) */}
-        {settingSection('🔗 공유 & 인수인계', <>
-          <Card style={{ backgroundColor: colors.cream }}>
-            <Text style={styles.shareTitle}>펫시터 공유 링크</Text>
-            <Text style={styles.shareDesc}>
-              링크로 접속한 사람은 로그인 없이 오늘의 체크리스트를 조회하고
-              항목을 체크할 수 있습니다. 링크는 7일간 유효합니다.
-            </Text>
-            {household?.shareToken && (
-              <View style={styles.tokenBox}>
-                <Text style={styles.tokenText} numberOfLines={1} ellipsizeMode="tail">
-                  catcare.app/share/{household.shareToken}
-                </Text>
-              </View>
-            )}
-            <View style={[styles.row, { marginTop: spacing.md }]}>
-              <Button
-                label="🔗 링크 공유"
-                onPress={handleShareLink}
-                loading={shareLoading}
-                style={{ flex: 1 }}
-              />
-              <Button
-                label="🔄 재생성"
-                variant="secondary"
-                onPress={handleRegenerateToken}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </Card>
+          {settingRow('', '이메일', user?.email ?? '-')}
         </>)}
 
         {/* 집사 관리 */}
-        {settingSection('👥 집사 관리', <>
+        {settingSection('집사 관리', <>
           <Card style={{ backgroundColor: colors.cream }}>
             <Text style={styles.shareTitle}>함께 돌보는 집사</Text>
             <Text style={styles.shareDesc}>
@@ -281,6 +249,28 @@ export default function SettingsScreen() {
                 style={{ marginTop: spacing.md }}
               />
             )}
+          </Card>
+        </>)}
+
+        {/* 공유 */}
+        {settingSection('공유', <>
+          <Card style={{ backgroundColor: colors.cream }}>
+            <Text style={styles.shareTitle}>펫시터 공유 링크</Text>
+            <Text style={styles.shareDesc}>
+              링크로 접속한 사람은 로그인 없이 오늘의 체크리스트를 조회하고
+              항목을 체크할 수 있습니다. 링크는 7일간 유효합니다.
+            </Text>
+            {household?.shareToken && (
+              <View style={styles.tokenBox}>
+                <Text style={styles.tokenText} numberOfLines={1} ellipsizeMode="tail">
+                  catcare.app/share/{household.shareToken}
+                </Text>
+              </View>
+            )}
+            <View style={[styles.row, { marginTop: spacing.md }]}>
+              <Button label="링크 공유" onPress={handleShareLink} loading={shareLoading} style={{ flex: 1 }} />
+              <Button label="재생성" variant="secondary" onPress={handleRegenerateToken} style={{ flex: 1 }} />
+            </View>
           </Card>
         </>)}
 
@@ -405,7 +395,7 @@ export default function SettingsScreen() {
 
         {/* Account */}
         {settingSection('🔐 계정', <>
-          {settingRow('🚪', '로그아웃', undefined, handleSignOut)}
+          {settingRow('', '로그아웃', undefined, handleSignOut)}
         </>)}
 
         <Text style={styles.version}>CatCare v1.0.0 · MVP~V5</Text>

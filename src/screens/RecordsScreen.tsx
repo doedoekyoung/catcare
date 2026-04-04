@@ -114,13 +114,14 @@ export default function RecordsScreen() {
     }).sort((a, b) => b.localeCompare(a));
   }, [allChecks, allLogs, recipes, selectedCatFilter]);
 
-  // 타임라인 아이템: 이슈 날짜 + 그 사이 이슈없음 묶음
+  // 타임라인 아이템: 오늘은 항상 표시 + 이슈 날짜 + 사이 이슈없음 묶음
   type TLItem =
     | { type: 'issue'; date: string }
     | { type: 'clean'; dates: string[] };
 
   const timelineItems = useMemo<TLItem[]>(() => {
     const issueSet = new Set(issueDates);
+    issueSet.add(today); // 오늘은 항상 표시
     const last30 = getLast30Days(); // descending
     const items: TLItem[] = [];
     let cleanBuf: string[] = [];
@@ -137,7 +138,7 @@ export default function RecordsScreen() {
     }
     if (cleanBuf.length > 0) items.push({ type: 'clean', dates: cleanBuf });
     return items;
-  }, [issueDates]);
+  }, [issueDates, today]);
 
   // Logs indexed by date (one per day) — for calendar
   const logsByDate = useMemo(() => {
@@ -277,20 +278,30 @@ export default function RecordsScreen() {
                   )}
                 </View>
                 <View style={styles.logContent}>
-                  {dayLogs.map((l) => (
-                    <View key={l.id} style={styles.logMemoBlock}>
-                      {l.tagColor && (
-                        <View style={[styles.logTagBadge, { backgroundColor: l.tagColor + '20', borderColor: l.tagColor }]}>
-                          <View style={[styles.logTagDot, { backgroundColor: l.tagColor }]} />
-                          <Text style={[styles.logTagText, { color: l.tagColor }]}>
-                            {TAG_OPTIONS.find((t) => t.value === l.tagColor)?.label ?? ''}
-                            {l.catId ? ` · ${cats.find((c) => c.id === l.catId)?.name ?? ''}` : ''}
+                  {dayLogs.length === 0 && missedItems.length === 0 && (
+                    <Text style={styles.cleanDayText}>이상없음</Text>
+                  )}
+                  {dayLogs.map((l) => {
+                    const isWarn = ['#EF4444','#F97316','#EAB308'].includes(l.tagColor ?? '');
+                    const tagLabel = TAG_OPTIONS.find((t) => t.value === l.tagColor)?.label ?? '';
+                    const catName = l.catId ? cats.find((c) => c.id === l.catId)?.name ?? '' : '';
+                    if (!isWarn) {
+                      return (
+                        <Text key={l.id} style={styles.cleanDayText}>이상없음</Text>
+                      );
+                    }
+                    return (
+                      <View key={l.id} style={styles.logMemoBlock}>
+                        <View style={[styles.logTagBadge, { backgroundColor: l.tagColor! + '20', borderColor: l.tagColor! }]}>
+                          <View style={[styles.logTagDot, { backgroundColor: l.tagColor! }]} />
+                          <Text style={[styles.logTagText, { color: l.tagColor! }]}>
+                            {tagLabel}{catName ? ` · ${catName}` : ''}
                           </Text>
                         </View>
-                      )}
-                      <Text style={styles.logText}>{l.text}</Text>
-                    </View>
-                  ))}
+                        <Text style={styles.logText}>{l.text}</Text>
+                      </View>
+                    );
+                  })}
                   {missedItems.map((item, i) => (
                     <View key={i} style={styles.missedItem}>
                       <Text style={styles.missedMark}>✗</Text>
@@ -471,6 +482,7 @@ const styles = StyleSheet.create({
   logTagDot: { width: 8, height: 8, borderRadius: 4 },
   logTagText: { fontSize: 11, fontWeight: '600' },
   logText: { fontSize: 14, color: colors.charcoal, lineHeight: 22 },
+  cleanDayText: { fontSize: 13, color: '#22C55E', fontWeight: '600' },
   cleanRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 10, paddingHorizontal: 4, marginBottom: 8,
