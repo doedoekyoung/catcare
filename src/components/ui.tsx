@@ -17,6 +17,7 @@ import {
   type ViewStyle,
   type TextStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, radius, typography, shadow } from '../utils/theme';
 
 // ── Button ────────────────────────────────────────────────────────────────────
@@ -133,18 +134,21 @@ interface SheetProps {
 }
 
 export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, spacing.lg);
+
   if (Platform.OS === 'web') {
     if (!visible) return null;
     return (
       <View style={styles.overlayFixed} pointerEvents="box-none">
         <Pressable style={styles.overlayTouchable} onPress={onClose} />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: bottomPad }]}>
           <View style={styles.sheetHandle} />
           {title && <Text style={styles.sheetTitle}>{title}</Text>}
           <ScrollView
             showsVerticalScrollIndicator={false}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: spacing.lg }}
+            contentContainerStyle={{ paddingBottom: spacing.md }}
           >
             {children}
           </ScrollView>
@@ -160,13 +164,13 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
+        <Pressable style={[styles.sheet, { paddingBottom: bottomPad }]} onPress={() => {}}>
           <View style={styles.sheetHandle} />
           {title && <Text style={styles.sheetTitle}>{title}</Text>}
           <ScrollView
             showsVerticalScrollIndicator={false}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: spacing.lg }}
+            contentContainerStyle={{ paddingBottom: spacing.md }}
           >
             {children}
           </ScrollView>
