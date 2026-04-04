@@ -122,7 +122,7 @@ export default function RecordsScreen() {
   const timelineItems = useMemo<TLItem[]>(() => {
     const issueSet = new Set(issueDates);
     issueSet.add(today); // 오늘은 항상 표시
-    const last30 = getLast30Days(); // descending
+    const last30 = [...getLast30Days()].reverse(); // 최신순
     const items: TLItem[] = [];
     let cleanBuf: string[] = [];
     for (const date of last30) {

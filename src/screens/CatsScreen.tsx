@@ -692,7 +692,7 @@ export default function CatsScreen() {
               style={styles.deleteRecipeBtn}
               onPress={() => { setCatModal(false); setTimeout(() => handleDeleteCat(editingCat), 300); }}
             >
-              <Text style={styles.deleteRecipeBtnText}>이 고양이 삭제</Text>
+              <Text style={styles.deleteRecipeBtnText}>정보 삭제</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
