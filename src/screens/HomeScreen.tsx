@@ -31,15 +31,9 @@ const TIME_SLOTS: TimeSlot[] = ['morning', 'lunch', 'evening'];
 export default function HomeScreen() {
   const {
     cats, recipes, checks, logs, selectedCatIds, user, household,
-    setSelectedCatIds, toggleCheck, setLogs,
+    toggleCatSelection, toggleCheck, setLogs,
   } = useStore();
 
-  // single-select: null = 전체
-  const activeCatId: string | null = selectedCatIds.length === 1 ? selectedCatIds[0] : null;
-  const selectCat = (catId: string | null) => {
-    if (catId === null) setSelectedCatIds(cats.map((c) => c.id));
-    else setSelectedCatIds([catId]);
-  };
 
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logText, setLogText] = useState('');
@@ -129,27 +123,32 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Cat tab bar */}
-      {cats.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catTabScroll}>
-          <View style={styles.catTabBar}>
-            <TouchableOpacity
-              style={[styles.catTab, activeCatId === null && styles.catTabActive]}
-              onPress={() => selectCat(null)}
-            >
-              <Text style={[styles.catTabText, activeCatId === null && styles.catTabTextActive]}>전체</Text>
-            </TouchableOpacity>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} tintColor={colors.caramel} />}
+      >
+        {/* Cat selector chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+          <View style={styles.chips}>
             {cats.map((cat) => {
+              const sel = selectedCatIds.includes(cat.id);
               const tagColor = cat.tagColor ?? colors.caramel;
-              const isActive = activeCatId === cat.id;
               return (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[styles.catTab, isActive && { borderBottomColor: tagColor }]}
-                  onPress={() => selectCat(cat.id)}
+                  style={[
+                    styles.chip,
+                    { borderColor: tagColor },
+                    sel ? { backgroundColor: tagColor } : { backgroundColor: tagColor + '15' },
+                  ]}
+                  onPress={() => toggleCatSelection(cat.id)}
                 >
-                  <View style={[styles.catTabDot, { backgroundColor: tagColor }]} />
-                  <Text style={[styles.catTabText, isActive && { color: tagColor, fontWeight: '700' }]}>
+                  <Text style={[styles.chipInitial, { color: sel ? '#fff' : tagColor }]}>
+                    {cat.name.charAt(0)}
+                  </Text>
+                  <Text style={[styles.chipText, { color: sel ? '#fff' : tagColor }]}>
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
@@ -157,14 +156,7 @@ export default function HomeScreen() {
             })}
           </View>
         </ScrollView>
-      )}
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} tintColor={colors.caramel} />}
-      >
         {cats.length === 0 && (
           <EmptyState
             emoji="🐱"
@@ -343,22 +335,17 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: radius.md,
     backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
   },
-  catTabScroll: {
-    borderBottomWidth: 1.5, borderBottomColor: colors.border,
-    backgroundColor: colors.warmWhite, flexShrink: 0,
-  },
-  catTabBar: { flexDirection: 'row', paddingHorizontal: spacing.lg },
-  catTab: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingVertical: 11, paddingHorizontal: 4, marginRight: 20,
-    borderBottomWidth: 2.5, borderBottomColor: 'transparent',
-  },
-  catTabActive: { borderBottomColor: colors.caramel },
-  catTabDot: { width: 7, height: 7, borderRadius: 4 },
-  catTabText: { fontSize: 13, fontWeight: '600', color: colors.muted },
-  catTabTextActive: { color: colors.caramel },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: 80 },
+  chipsScroll: { marginBottom: spacing.lg, marginHorizontal: -spacing.lg },
+  chips: { flexDirection: 'row', gap: 8, paddingHorizontal: spacing.lg },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 8, paddingHorizontal: 14,
+    borderRadius: radius.full, borderWidth: 1.5,
+  },
+  chipInitial: { fontSize: 14, fontWeight: '700', width: 20, textAlign: 'center' },
+  chipText: { fontSize: 13, fontWeight: '500' },
   section: { marginBottom: spacing.lg },
   checkItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
