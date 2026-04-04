@@ -54,21 +54,14 @@ CREATE TRIGGER enforce_daily_logs_limit
   BEFORE INSERT ON daily_logs
   FOR EACH ROW EXECUTE FUNCTION check_daily_logs_limit();
 
--- 4. 텍스트 길이 제한 (이름 30자, 텍스트 500자)
-CREATE OR REPLACE FUNCTION check_text_length()
+-- 4. 텍스트 길이 제한 — 테이블별 개별 함수 (컬럼이 다르므로 공유 불가)
+
+-- 4a. cats.name 30자
+CREATE OR REPLACE FUNCTION check_cats_text_length()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- cats.name
-  IF TG_TABLE_NAME = 'cats' AND length(NEW.name) > 30 THEN
+  IF length(NEW.name) > 30 THEN
     RAISE EXCEPTION '고양이 이름은 30자까지 입력할 수 있습니다.';
-  END IF;
-  -- recipes.name
-  IF TG_TABLE_NAME = 'recipes' AND length(NEW.name) > 30 THEN
-    RAISE EXCEPTION '루틴 이름은 30자까지 입력할 수 있습니다.';
-  END IF;
-  -- daily_logs.text
-  IF TG_TABLE_NAME = 'daily_logs' AND length(NEW.text) > 500 THEN
-    RAISE EXCEPTION '메모는 500자까지 입력할 수 있습니다.';
   END IF;
   RETURN NEW;
 END;
@@ -77,14 +70,39 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS enforce_text_length ON cats;
 CREATE TRIGGER enforce_text_length
   BEFORE INSERT OR UPDATE ON cats
-  FOR EACH ROW EXECUTE FUNCTION check_text_length();
+  FOR EACH ROW EXECUTE FUNCTION check_cats_text_length();
+
+-- 4b. recipes.name 30자
+CREATE OR REPLACE FUNCTION check_recipes_text_length()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF length(NEW.name) > 30 THEN
+    RAISE EXCEPTION '루틴 이름은 30자까지 입력할 수 있습니다.';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS enforce_text_length ON recipes;
 CREATE TRIGGER enforce_text_length
   BEFORE INSERT OR UPDATE ON recipes
-  FOR EACH ROW EXECUTE FUNCTION check_text_length();
+  FOR EACH ROW EXECUTE FUNCTION check_recipes_text_length();
+
+-- 4c. daily_logs.text 500자
+CREATE OR REPLACE FUNCTION check_logs_text_length()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF length(NEW.text) > 500 THEN
+    RAISE EXCEPTION '메모는 500자까지 입력할 수 있습니다.';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS enforce_text_length ON daily_logs;
 CREATE TRIGGER enforce_text_length
   BEFORE INSERT OR UPDATE ON daily_logs
-  FOR EACH ROW EXECUTE FUNCTION check_text_length();
+  FOR EACH ROW EXECUTE FUNCTION check_logs_text_length();
+
+-- 이전 공유 함수 정리
+DROP FUNCTION IF EXISTS check_text_length();
