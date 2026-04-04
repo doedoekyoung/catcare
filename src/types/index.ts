@@ -26,6 +26,7 @@ export interface Recipe {
   id: string;
   name: string;
   times: TimeSlot[];           // 복수 시간대 선택
+  days: number[];              // 0=일 1=월 2=화 3=수 4=목 5=금 6=토, 빈 배열=매일
   catIds: string[];
   active: boolean;
   householdId: string;

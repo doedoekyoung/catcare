@@ -3,12 +3,12 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, Image,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore, selectActiveRecipesForCats, selectCompletionRate } from '../store/useStore';
 import { upsertCheck, upsertLog } from '../services/dbService';
-import { Card, SectionTitle, ProgressBar, EmptyState, BottomSheet, Input, Button } from '../components/ui';
+import { Card, SectionTitle, EmptyState, BottomSheet, Input, Button } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { toDateKey, formatDisplayDate } from '../utils/date';
 import type { CheckRecord, Recipe, TimeSlot } from '../types';
@@ -16,7 +16,7 @@ import type { CheckRecord, Recipe, TimeSlot } from '../types';
 const TAG_OPTIONS = [
   { value: '#EF4444', label: '응급' },
   { value: '#F97316', label: '위험' },
-  { value: '#EAB308', label: '모니터링' },
+  { value: '#EAB308', label: '주의' },
   { value: '#22C55E', label: '안정' },
 ];
 
@@ -31,12 +31,20 @@ const TIME_SLOTS: TimeSlot[] = ['morning', 'lunch', 'evening'];
 export default function HomeScreen() {
   const {
     cats, recipes, checks, logs, selectedCatIds, user, household,
-    toggleCatSelection, toggleCheck, setLogs,
+    setSelectedCatIds, toggleCheck, setLogs,
   } = useStore();
+
+  // single-select: null = 전체
+  const activeCatId: string | null = selectedCatIds.length === 1 ? selectedCatIds[0] : null;
+  const selectCat = (catId: string | null) => {
+    if (catId === null) setSelectedCatIds(cats.map((c) => c.id));
+    else setSelectedCatIds([catId]);
+  };
 
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logText, setLogText] = useState('');
   const [logTagColor, setLogTagColor] = useState<string | null>(null);
+  const [logCatId, setLogCatId] = useState<string | null>(null);
   const [refreshing] = useState(false);
 
   const today = toDateKey();
@@ -80,6 +88,7 @@ export default function HomeScreen() {
       id: existing?.id ?? crypto.randomUUID(),
       date: today, text: logText.trim(),
       tagColor: logTagColor ?? undefined,
+      catId: logCatId ?? undefined,
       householdId: household.id, authorId: user.uid,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -97,6 +106,7 @@ export default function HomeScreen() {
   const openLogModal = () => {
     setLogText(todayLog?.text ?? '');
     setLogTagColor(todayLog?.tagColor ?? null);
+    setLogCatId(todayLog?.catId ?? null);
     setLogModalVisible(true);
   };
 
@@ -105,47 +115,41 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.dateLabel}>{formatDisplayDate(today)}</Text>
-          <Text style={styles.greeting}>
-            {pct === 100 ? '오늘 루틴 완료 🎉' : '오늘의 돌봄 루틴'}
-          </Text>
+          <Text style={styles.greeting}>오늘의 돌봄 루틴</Text>
         </View>
-        <TouchableOpacity style={styles.logBtn} onPress={openLogModal}>
-          <Text style={{ fontSize: 18 }}>✏️</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {total > 0 && (
+            <View style={[styles.doneBadge, pct === 100 && { backgroundColor: colors.sage }]}>
+              <Text style={styles.doneBadgeText}>{done} / {total}</Text>
+            </View>
+          )}
+          <TouchableOpacity style={styles.logBtn} onPress={openLogModal}>
+            <Text style={{ fontSize: 16 }}>✏</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} tintColor={colors.caramel} />}
-      >
-        {/* Cat selector chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-          <View style={styles.chips}>
+      {/* Cat tab bar */}
+      {cats.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catTabScroll}>
+          <View style={styles.catTabBar}>
+            <TouchableOpacity
+              style={[styles.catTab, activeCatId === null && styles.catTabActive]}
+              onPress={() => selectCat(null)}
+            >
+              <Text style={[styles.catTabText, activeCatId === null && styles.catTabTextActive]}>전체</Text>
+            </TouchableOpacity>
             {cats.map((cat) => {
-              const sel = selectedCatIds.includes(cat.id);
               const tagColor = cat.tagColor ?? colors.caramel;
+              const isActive = activeCatId === cat.id;
               return (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[
-                    styles.chip,
-                    { borderColor: tagColor },
-                    sel
-                      ? { backgroundColor: tagColor }
-                      : { backgroundColor: tagColor + '15' },
-                  ]}
-                  onPress={() => toggleCatSelection(cat.id)}
+                  style={[styles.catTab, isActive && { borderBottomColor: tagColor }]}
+                  onPress={() => selectCat(cat.id)}
                 >
-                  {cat.photoUri ? (
-                    <Image source={{ uri: cat.photoUri }} style={styles.chipPhoto} />
-                  ) : (
-                    <Text style={[styles.chipInitial, { color: sel ? '#fff' : tagColor }]}>
-                      {cat.name.charAt(0)}
-                    </Text>
-                  )}
-                  <Text style={[styles.chipText, { color: sel ? '#fff' : tagColor }]}>
+                  <View style={[styles.catTabDot, { backgroundColor: tagColor }]} />
+                  <Text style={[styles.catTabText, isActive && { color: tagColor, fontWeight: '700' }]}>
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
@@ -153,34 +157,20 @@ export default function HomeScreen() {
             })}
           </View>
         </ScrollView>
+      )}
 
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} tintColor={colors.caramel} />}
+      >
         {cats.length === 0 && (
           <EmptyState
             emoji="🐱"
             title="고양이를 등록해보세요"
             desc="하단 고양이 탭에서 첫 고양이를 등록하고 루틴을 만들어보세요"
           />
-        )}
-
-        {/* Progress */}
-        {total > 0 && (
-          <View style={styles.progressWrap}>
-            {pct === 100 ? (
-              <View style={styles.allDoneBanner}>
-                <Text style={styles.allDoneEmoji}>🎉</Text>
-                <Text style={styles.allDoneTitle}>오늘 루틴 완료!</Text>
-                <Text style={styles.allDoneSub}>모든 돌봄 항목을 마쳤어요 ✨</Text>
-              </View>
-            ) : (
-              <>
-                <View style={styles.progressRow}>
-                  <Text style={styles.progressLabel}>오늘 완료 현황</Text>
-                  <Text style={styles.progressCount}>{done} / {total}</Text>
-                </View>
-                <ProgressBar pct={pct} />
-              </>
-            )}
-          </View>
         )}
 
         {/* Checklist by time group */}
@@ -230,7 +220,7 @@ export default function HomeScreen() {
         {activeRecipes.length === 0 && cats.length > 0 && (
           <Card style={{ backgroundColor: colors.warnBg }}>
             <Text style={{ fontSize: 13, color: colors.warnText }}>
-              ⚠️ 선택한 고양이에 등록된 루틴 항목이 없어요.{'\n'}
+              선택한 고양이에 등록된 루틴 항목이 없어요.{'\n'}
               고양이 탭에서 루틴을 추가해보세요.
             </Text>
           </Card>
@@ -239,25 +229,62 @@ export default function HomeScreen() {
         {/* Today log — 고양이 등록 후에만 표시 */}
         {cats.length > 0 && (
           <>
-            <SectionTitle title="📓 오늘의 메모" style={{ marginTop: 8 }} />
+            <SectionTitle title="오늘의 메모" style={{ marginTop: 8 }} />
             {todayLog ? (
               <Card>
+                {todayLog.tagColor && (
+                  <View style={[styles.logTagBadge, { backgroundColor: todayLog.tagColor + '20', borderColor: todayLog.tagColor }]}>
+                    <View style={[styles.logTagDot, { backgroundColor: todayLog.tagColor }]} />
+                    <Text style={[styles.logTagText, { color: todayLog.tagColor }]}>
+                      {TAG_OPTIONS.find((t) => t.value === todayLog.tagColor)?.label ?? ''}
+                      {todayLog.catId ? ` · ${cats.find((c) => c.id === todayLog.catId)?.name ?? ''}` : ''}
+                    </Text>
+                  </View>
+                )}
                 <Text style={styles.logText}>{todayLog.text}</Text>
-                <Button label="✏️ 수정" variant="ghost" size="sm" onPress={openLogModal} />
+                <Button label="수정" variant="ghost" size="sm" onPress={openLogModal} />
               </Card>
             ) : (
               <Card style={{ backgroundColor: colors.cream }}>
                 <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 10, textAlign: 'center' }}>
                   오늘의 특이사항을 기록해보세요
                 </Text>
-                <Button label="✏️ 메모 추가" variant="secondary" size="sm" onPress={openLogModal} />
+                <Button label="메모 추가" variant="secondary" size="sm" onPress={openLogModal} />
               </Card>
             )}
           </>
         )}
       </ScrollView>
 
-      <BottomSheet visible={logModalVisible} onClose={() => setLogModalVisible(false)} title="✏️ 오늘의 기록">
+      <BottomSheet visible={logModalVisible} onClose={() => setLogModalVisible(false)} title="오늘의 기록">
+        {cats.length > 0 && (
+          <View style={styles.catSelectRow}>
+            <Text style={styles.tagLabel}>고양이</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <TouchableOpacity
+                  style={[styles.tagChip, logCatId === null && styles.tagChipSelected, { borderColor: colors.border }]}
+                  onPress={() => setLogCatId(null)}
+                >
+                  <Text style={[styles.tagChipText, logCatId === null && { color: colors.charcoal, fontWeight: '600' }]}>전체</Text>
+                </TouchableOpacity>
+                {cats.map((cat) => {
+                  const color = cat.tagColor ?? colors.caramel;
+                  const sel = logCatId === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.tagChip, { borderColor: color, backgroundColor: sel ? color : color + '18' }]}
+                      onPress={() => setLogCatId(sel ? null : cat.id)}
+                    >
+                      <Text style={[styles.tagChipText, { color: sel ? '#fff' : color }]}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        )}
         <Input
           label="특이사항 메모"
           value={logText}
@@ -269,7 +296,7 @@ export default function HomeScreen() {
           style={{ minHeight: 120 }}
         />
         <View style={styles.tagRow}>
-          <Text style={styles.tagLabel}>태그</Text>
+          <Text style={styles.tagLabel}>상태</Text>
           <View style={styles.tagOptions}>
             <TouchableOpacity
               style={[styles.tagChip, logTagColor === null && styles.tagChipSelected, { borderColor: colors.border }]}
@@ -306,33 +333,32 @@ const styles = StyleSheet.create({
   },
   dateLabel: { fontSize: 12, color: colors.muted, marginBottom: 2 },
   greeting: { fontSize: 20, fontWeight: '700', color: colors.charcoal },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  doneBadge: {
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: radius.full, backgroundColor: colors.caramel,
+  },
+  doneBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   logBtn: {
-    width: 42, height: 42, borderRadius: radius.md,
+    width: 36, height: 36, borderRadius: radius.md,
     backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
   },
+  catTabScroll: {
+    borderBottomWidth: 1.5, borderBottomColor: colors.border,
+    backgroundColor: colors.warmWhite, flexShrink: 0,
+  },
+  catTabBar: { flexDirection: 'row', paddingHorizontal: spacing.lg },
+  catTab: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingVertical: 11, paddingHorizontal: 4, marginRight: 20,
+    borderBottomWidth: 2.5, borderBottomColor: 'transparent',
+  },
+  catTabActive: { borderBottomColor: colors.caramel },
+  catTabDot: { width: 7, height: 7, borderRadius: 4 },
+  catTabText: { fontSize: 13, fontWeight: '600', color: colors.muted },
+  catTabTextActive: { color: colors.caramel },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: 80 },
-  chipsScroll: { marginBottom: spacing.lg, marginHorizontal: -spacing.lg },
-  chips: { flexDirection: 'row', gap: 8, paddingHorizontal: spacing.lg },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 8, paddingHorizontal: 14,
-    borderRadius: radius.full, borderWidth: 1.5,
-  },
-  chipPhoto: { width: 20, height: 20, borderRadius: 10 },
-  chipInitial: { fontSize: 14, fontWeight: '700', width: 20, textAlign: 'center' },
-  chipText: { fontSize: 13, fontWeight: '500' },
-  progressWrap: { marginBottom: spacing.lg },
-  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressLabel: { fontSize: 13, color: colors.brownMid },
-  progressCount: { fontSize: 13, color: colors.caramel, fontWeight: '700' },
-  allDoneBanner: {
-    backgroundColor: colors.sage, borderRadius: radius.lg,
-    padding: spacing.lg, alignItems: 'center',
-  },
-  allDoneEmoji: { fontSize: 36, marginBottom: 6 },
-  allDoneTitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  allDoneSub: { fontSize: 13, color: 'rgba(255,255,255,0.85)' },
   section: { marginBottom: spacing.lg },
   checkItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -349,6 +375,14 @@ const styles = StyleSheet.create({
   checkTitleDone: { textDecorationLine: 'line-through', color: colors.muted },
   checkMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
   logText: { fontSize: 14, color: colors.charcoal, lineHeight: 22 },
+  logTagBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full,
+    borderWidth: 1, alignSelf: 'flex-start', marginBottom: 8,
+  },
+  logTagDot: { width: 6, height: 6, borderRadius: 3 },
+  logTagText: { fontSize: 11, fontWeight: '700' },
+  catSelectRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.md },
   tagRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
   tagLabel: { fontSize: 13, color: colors.muted, minWidth: 28 },
   tagOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 },

@@ -27,7 +27,7 @@ const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 const TAB_LABELS: Record<string, string> = {
-  Home: '홈', Cats: '고양이', Records: '기록', Settings: '설정',
+  Home: '홈', Cats: '고양이', Records: '기록', Settings: '관리',
 };
 
 function MainTabs() {

@@ -34,13 +34,14 @@ import {
   addMemberToHousehold,
   removeMemberFromHousehold,
   getUsersByIds,
+  upsertUser,
 } from '../services/dbService';
 import type { User } from '../types';
 import { Button, Card } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 
 export default function SettingsScreen() {
-  const { user, household, cats, recipes, setUser, setHousehold } = useStore();
+  const { user, household, setUser, setHousehold } = useStore();
   const [shareLoading, setShareLoading] = useState(false);
 
   // 집사 관리 상태
@@ -48,6 +49,11 @@ export default function SettingsScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [emailInput, setEmailInput] = useState('');
   const [addLoading, setAddLoading] = useState(false);
+
+  // 프로필 이름 편집
+  const [nameEditVisible, setNameEditVisible] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameLoading, setNameLoading] = useState(false);
 
   const isOwner = user?.uid === household?.ownerId;
 
@@ -143,6 +149,21 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleSaveName = async () => {
+    if (!user || !nameInput.trim()) return;
+    setNameLoading(true);
+    try {
+      const updated = { ...user, displayName: nameInput.trim() };
+      await upsertUser(updated);
+      setUser(updated);
+      setNameEditVisible(false);
+    } catch (e: any) {
+      webAlert('오류', e?.message ?? '저장 중 오류가 발생했어요.');
+    } finally {
+      setNameLoading(false);
+    }
+  };
+
   const handleSignOut = () => {
     webConfirm(
       '로그아웃',
@@ -181,21 +202,18 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>설정</Text>
+        <Text style={styles.headerTitle}>관리</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
         {/* Profile */}
         {settingSection('👤 프로필', <>
-          {settingRow('🐱', '표시 이름', user?.displayName ?? '-')}
+          {settingRow('🐱', '이름', user?.displayName ?? '-', () => {
+            setNameInput(user?.displayName ?? '');
+            setNameEditVisible(true);
+          })}
           {settingRow('📧', '이메일', user?.email ?? '-')}
-        </>)}
-
-        {/* Stats */}
-        {settingSection('📊 현황', <>
-          {settingRow('🐈', '등록된 고양이', `${cats.length}마리`)}
-          {settingRow('📋', '활성 루틴 항목', `${recipes.filter((r) => r.active).length}개`)}
         </>)}
 
         {/* Share / Handover (REQ-V1-03~05) */}
@@ -265,6 +283,50 @@ export default function SettingsScreen() {
             )}
           </Card>
         </>)}
+
+        {/* 이름 편집 모달 */}
+        {Platform.OS === 'web' ? (
+          nameEditVisible ? (
+            <View style={styles.modalOverlayFixed}>
+              <Pressable style={styles.modalBackdrop} onPress={() => setNameEditVisible(false)} />
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>이름 변경</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={nameInput}
+                  onChangeText={setNameInput}
+                  placeholder="표시 이름"
+                  placeholderTextColor={colors.muted}
+                  autoFocus
+                />
+                <View style={[styles.row, { marginTop: spacing.md }]}>
+                  <Button label="취소" variant="secondary" onPress={() => setNameEditVisible(false)} style={{ flex: 1 }} />
+                  <Button label={nameLoading ? '저장 중…' : '저장'} onPress={handleSaveName} loading={nameLoading} style={{ flex: 1 }} />
+                </View>
+              </View>
+            </View>
+          ) : null
+        ) : (
+          <Modal visible={nameEditVisible} transparent animationType="fade" onRequestClose={() => setNameEditVisible(false)}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>이름 변경</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={nameInput}
+                  onChangeText={setNameInput}
+                  placeholder="표시 이름"
+                  placeholderTextColor={colors.muted}
+                  autoFocus
+                />
+                <View style={[styles.row, { marginTop: spacing.md }]}>
+                  <Button label="취소" variant="secondary" onPress={() => setNameEditVisible(false)} style={{ flex: 1 }} />
+                  <Button label={nameLoading ? '저장 중…' : '저장'} onPress={handleSaveName} loading={nameLoading} style={{ flex: 1 }} />
+                </View>
+              </View>
+            </View>
+          </Modal>
+        )}
 
         {/* 집사 추가 모달 */}
         {Platform.OS === 'web' ? (
@@ -340,17 +402,6 @@ export default function SettingsScreen() {
             </View>
           </Modal>
         )}
-
-        {/* IoT (REQ-V5-06 placeholder) */}
-        {settingSection('📡 IoT 연동 (준비 중)', <>
-          <Card style={{ backgroundColor: colors.warnBg }}>
-            <Text style={styles.iotTitle}>🚀 V6에서 오픈 예정</Text>
-            <Text style={styles.iotDesc}>
-              PETKIT, Petlibro RFID 급식기, Petcube 카메라 등의 스마트 기기와
-              연동하여 체크리스트를 자동으로 완료 처리할 수 있습니다.
-            </Text>
-          </Card>
-        </>)}
 
         {/* Account */}
         {settingSection('🔐 계정', <>

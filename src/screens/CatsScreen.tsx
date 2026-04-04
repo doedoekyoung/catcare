@@ -1,8 +1,8 @@
 // src/screens/CatsScreen.tsx
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Platform,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image, Platform, Switch,
 } from 'react-native';
 
 // Alert.alert은 웹에서 동작하지 않으므로 플랫폼별 분기
@@ -35,10 +35,12 @@ import { useStore } from '../store/useStore';
 import {
   addCat as fsAddCat, updateCat, deleteCat as fsDeleteCat,
   addRecipe as fsAddRecipe, updateRecipe, deleteRecipe as fsDeleteRecipe,
+  getChecksForDateRange,
 } from '../services/dbService';
 import { Button, Input, BottomSheet, EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow, CAT_TAG_COLORS } from '../utils/theme';
-import type { Cat, Recipe, TimeSlot } from '../types';
+import { toDateKey } from '../utils/date';
+import type { Cat, Recipe, TimeSlot, CheckRecord } from '../types';
 
 const GENDER_OPTIONS = [
   { value: 'male' as const, label: '남아' },
@@ -57,6 +59,13 @@ const TIME_ICONS: Record<TimeSlot, string> = {
   lunch: '☀️',
   evening: '🌙',
 };
+
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+
+function daysLabel(days: number[]): string {
+  if (!days || days.length === 0 || days.length === 7) return '매일';
+  return '매주 ' + [...days].sort((a, b) => a - b).map((d) => DAY_NAMES[d]).join('·');
+}
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_VALUES  = Array.from({ length: CURRENT_YEAR - 1989 }, (_, i) => CURRENT_YEAR - i);
@@ -200,8 +209,57 @@ function DateDropdown({
   );
 }
 
+function getLast7Days(): string[] {
+  const result: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    result.push(toDateKey(d));
+  }
+  return result;
+}
+
+function getCheckStatus(
+  recipe: Recipe,
+  date: string,
+  allChecks: CheckRecord[],
+): '✓' | '✗' | '—' {
+  const d = new Date(date + 'T00:00:00');
+  const dayOfWeek = d.getDay();
+  const scheduled = recipe.days.length === 0 || recipe.days.includes(dayOfWeek);
+  if (!scheduled) return '—';
+  const done = allChecks.some(
+    (c) => c.date === date && c.recipeId === recipe.id && c.done
+  );
+  return done ? '✓' : '✗';
+}
+
 export default function CatsScreen() {
   const { cats, recipes, household, user, setCats, setRecipes } = useStore();
+
+  // ── 7-day history state ───────────────────────────────────────────────────────
+  const [expandedCatId, setExpandedCatId] = useState<string | null>(null);
+  const [historyChecks, setHistoryChecks] = useState<CheckRecord[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  const loadHistory = useCallback(async () => {
+    if (historyLoaded || !household?.id) return;
+    const last7 = getLast7Days();
+    try {
+      const records = await getChecksForDateRange(household.id, last7[0], last7[6]);
+      setHistoryChecks(records);
+      setHistoryLoaded(true);
+    } catch {}
+  }, [historyLoaded, household?.id]);
+
+  const handleToggleExpand = (catId: string) => {
+    if (expandedCatId === catId) {
+      setExpandedCatId(null);
+    } else {
+      setExpandedCatId(catId);
+      loadHistory();
+    }
+  };
 
   // ── Cat modal state ───────────────────────────────────────────────────────────
   const [catModal, setCatModal] = useState(false);
@@ -209,7 +267,7 @@ export default function CatsScreen() {
   const [catName, setCatName] = useState('');
   const [catPhotoUri, setCatPhotoUri] = useState('');
   const [catGender, setCatGender] = useState<'male' | 'female' | 'neutered' | ''>('');
-  const [catTagColor, setCatTagColor] = useState(CAT_TAG_COLORS[0]);
+  const [catTagColor, setCatTagColor] = useState<string>(CAT_TAG_COLORS[0]);
   const [catBirthYear, setCatBirthYear] = useState<number | null>(null);
   const [catBirthMonth, setCatBirthMonth] = useState<number | null>(null);
   const [catBirthDay, setCatBirthDay] = useState<number | null>(null);
@@ -221,6 +279,7 @@ export default function CatsScreen() {
   const [targetCatId, setTargetCatId] = useState('');
   const [recipeName, setRecipeName] = useState('');
   const [recipeTimes, setRecipeTimes] = useState<TimeSlot[]>(['morning']);
+  const [recipeDays, setRecipeDays] = useState<number[]>([]); // 빈 배열 = 매일
   const [recipeSharedCatIds, setRecipeSharedCatIds] = useState<string[]>([]);
 
   // ── Image picker ──────────────────────────────────────────────────────────────
@@ -314,6 +373,7 @@ export default function CatsScreen() {
     setTargetCatId(catId);
     setRecipeName('');
     setRecipeTimes(['morning']);
+    setRecipeDays([]);
     setRecipeSharedCatIds([catId]);
     setRecipeModal(true);
   };
@@ -323,6 +383,7 @@ export default function CatsScreen() {
     setTargetCatId(recipe.catIds[0]);
     setRecipeName(recipe.name);
     setRecipeTimes(recipe.times);
+    setRecipeDays(recipe.days ?? []);
     setRecipeSharedCatIds(recipe.catIds);
     setRecipeModal(true);
   };
@@ -330,19 +391,20 @@ export default function CatsScreen() {
   const handleSaveRecipe = async () => {
     if (!recipeName.trim() || !household || recipeTimes.length === 0) return;
     const catIds = recipeSharedCatIds.length > 0 ? recipeSharedCatIds : [targetCatId];
+    const days = recipeDays.length === 7 ? [] : recipeDays; // 전체 선택 = 빈 배열(매일)
     try {
       if (editingRecipe) {
         await updateRecipe(household.id, editingRecipe.id, {
-          name: recipeName.trim(), times: recipeTimes, catIds,
+          name: recipeName.trim(), times: recipeTimes, days, catIds,
         });
         setRecipes(recipes.map((r) =>
           r.id === editingRecipe.id
-            ? { ...r, name: recipeName.trim(), times: recipeTimes, catIds }
+            ? { ...r, name: recipeName.trim(), times: recipeTimes, days, catIds }
             : r
         ));
       } else {
         const recipe = await fsAddRecipe(household.id, {
-          name: recipeName.trim(), times: recipeTimes, catIds,
+          name: recipeName.trim(), times: recipeTimes, days, catIds,
           active: true, householdId: household.id,
         });
         setRecipes([...recipes, recipe]);
@@ -378,6 +440,12 @@ export default function CatsScreen() {
   const toggleRecipeTime = (t: TimeSlot) => {
     setRecipeTimes((prev) =>
       prev.includes(t) ? prev.filter((v) => v !== t) : [...prev, t]
+    );
+  };
+
+  const toggleRecipeDay = (d: number) => {
+    setRecipeDays((prev) =>
+      prev.includes(d) ? prev.filter((v) => v !== d) : [...prev, d]
     );
   };
 
@@ -418,7 +486,7 @@ export default function CatsScreen() {
             <View key={cat.id}>
               {/* Cat Card */}
               <View style={[styles.catCard, shadow.sm]}>
-                <TouchableOpacity onPress={() => openEditCat(cat)}>
+                <TouchableOpacity onPress={() => handleToggleExpand(cat.id)}>
                   <View style={[styles.catAvatar, { backgroundColor: tagColor + '30', borderColor: tagColor }]}>
                     {cat.photoUri ? (
                       <Image source={{ uri: cat.photoUri }} style={styles.catAvatarImg} />
@@ -429,10 +497,13 @@ export default function CatsScreen() {
                     )}
                   </View>
                 </TouchableOpacity>
-                <View style={styles.catInfo}>
+                <TouchableOpacity style={styles.catInfo} onPress={() => handleToggleExpand(cat.id)}>
                   <View style={styles.catNameRow}>
                     <Text style={styles.catName}>{cat.name}</Text>
                     <View style={[styles.tagDot, { backgroundColor: tagColor }]} />
+                    <Text style={{ fontSize: 10, color: colors.muted }}>
+                      {expandedCatId === cat.id ? '▲' : '▼'}
+                    </Text>
                   </View>
                   <Text style={styles.catMeta}>
                     {cat.gender === 'male' ? '남아' : cat.gender === 'female' ? '여아' : cat.gender === 'neutered' ? '중성화' : ''}
@@ -440,7 +511,7 @@ export default function CatsScreen() {
                     {cat.birthYear ? `${cat.birthYear}년생` : ''}
                     {!cat.gender && !cat.birthYear ? `루틴 ${catRecipes.length}개` : ''}
                   </Text>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.catActions}>
                   <TouchableOpacity style={styles.iconBtn} onPress={() => openEditCat(cat)}>
                     <Text style={{ fontSize: 15 }}>✏️</Text>
@@ -457,7 +528,12 @@ export default function CatsScreen() {
               {/* Recipes */}
               <View style={styles.recipeList}>
                 {catRecipes.map((r) => (
-                  <View key={r.id} style={[styles.recipeCard, { borderLeftColor: tagColor, borderLeftWidth: 3 }]}>
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[styles.recipeCard, { borderLeftColor: tagColor, borderLeftWidth: 3 }, !r.active && styles.recipeCardInactive]}
+                    onPress={() => openEditRecipe(r)}
+                    activeOpacity={0.75}
+                  >
                     <View style={styles.recipeInfo}>
                       <Text style={[styles.recipeName, !r.active && styles.recipeNameInactive]}>
                         {r.name}
@@ -470,6 +546,7 @@ export default function CatsScreen() {
                             </Text>
                           </View>
                         ))}
+                        <Text style={styles.recipeMeta}>{daysLabel(r.days ?? [])}</Text>
                         {r.catIds.length > 1 && (
                           <Text style={styles.recipeMeta}>
                             공유: {r.catIds.map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean).join(', ')}
@@ -477,26 +554,76 @@ export default function CatsScreen() {
                         )}
                       </View>
                     </View>
-                    <View style={styles.recipeActions}>
-                      <TouchableOpacity onPress={() => openEditRecipe(r)} style={styles.smallBtn}>
-                        <Text style={{ fontSize: 14 }}>✏️</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleToggleActive(r)} style={styles.smallBtn}>
-                        <Text style={{ fontSize: 16 }}>{r.active ? '✅' : '⏸️'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteRecipe(r)} style={styles.smallBtn}>
-                        <Text style={{ fontSize: 14, color: colors.muted }}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                    <Switch
+                      value={r.active}
+                      onValueChange={() => handleToggleActive(r)}
+                      thumbColor={r.active ? '#fff' : '#ccc'}
+                      trackColor={{ false: colors.border, true: tagColor }}
+                    />
+                  </TouchableOpacity>
                 ))}
-                <Button
-                  label="+ 루틴 항목 추가"
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => openAddRecipe(cat.id)}
-                  style={{ marginTop: 6, marginBottom: spacing.lg, alignSelf: 'flex-start' }}
-                />
+
+                {/* 7-day history */}
+                {expandedCatId === cat.id && (() => {
+                  const last7 = getLast7Days();
+                  return (
+                    <View style={styles.historyWrap}>
+                      <Text style={styles.historyTitle}>최근 7일</Text>
+                      <View style={styles.historyHeader}>
+                        <View style={styles.historyRecipeLabel} />
+                        {last7.map((d) => {
+                          const dayNum = new Date(d + 'T00:00:00').getDate();
+                          const isToday = d === toDateKey();
+                          return (
+                            <View key={d} style={styles.historyDateCell}>
+                              <Text style={[styles.historyDateText, isToday && { color: colors.caramel, fontWeight: '700' }]}>
+                                {dayNum}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                      {catRecipes.map((r) => (
+                        <View key={r.id} style={styles.historyRow}>
+                          <Text style={styles.historyRecipeLabel} numberOfLines={1}>{r.name}</Text>
+                          {last7.map((d) => {
+                            const status = getCheckStatus(r, d, historyChecks);
+                            return (
+                              <View key={d} style={styles.historyCell}>
+                                <Text style={[
+                                  styles.historyCellText,
+                                  status === '✓' && { color: '#22C55E' },
+                                  status === '✗' && { color: '#EF4444' },
+                                  status === '—' && { color: colors.border },
+                                ]}>
+                                  {status}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
+
+                <View style={styles.recipeFooter}>
+                  <Button
+                    label="+ 루틴 항목 추가"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => openAddRecipe(cat.id)}
+                    style={{ alignSelf: 'flex-start' }}
+                  />
+                  <TouchableOpacity
+                    style={styles.historyToggleBtn}
+                    onPress={() => handleToggleExpand(cat.id)}
+                  >
+                    <Text style={styles.historyToggleText}>
+                      {expandedCatId === cat.id ? '접기' : '7일 기록'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           );
@@ -649,6 +776,29 @@ export default function CatsScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* 요일 선택 */}
+        <View style={styles.dayLabelRow}>
+          <Text style={styles.fieldLabel}>반복 요일</Text>
+          <Text style={styles.dayResultText}>{daysLabel(recipeDays)}</Text>
+        </View>
+        <View style={styles.dayRow}>
+          {DAY_NAMES.map((name, idx) => {
+            const sel = recipeDays.length === 0 || recipeDays.includes(idx);
+            const isActive = recipeDays.includes(idx);
+            return (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.dayBtn, isActive && styles.dayBtnSel]}
+                onPress={() => toggleRecipeDay(idx)}
+              >
+                <Text style={[styles.dayBtnText, isActive && styles.dayBtnTextSel]}>
+                  {name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         <Text style={styles.fieldLabel}>적용 고양이 * (복수 선택 가능)</Text>
         <View style={styles.optionRow}>
           {cats.map((c) => {
@@ -675,6 +825,17 @@ export default function CatsScreen() {
           <Button label="취소" variant="secondary" onPress={() => setRecipeModal(false)} style={{ flex: 1 }} />
           <Button label={editingRecipe ? '수정' : '등록'} onPress={handleSaveRecipe} style={{ flex: 1 }} />
         </View>
+        {editingRecipe && (
+          <TouchableOpacity
+            style={styles.deleteRecipeBtn}
+            onPress={() => {
+              setRecipeModal(false);
+              setTimeout(() => handleDeleteRecipe(editingRecipe), 300);
+            }}
+          >
+            <Text style={styles.deleteRecipeBtnText}>이 루틴 삭제</Text>
+          </TouchableOpacity>
+        )}
       </BottomSheet>
     </SafeAreaView>
   );
@@ -783,4 +944,66 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   row: { flexDirection: 'row', gap: 10 },
+
+  // 요일 선택
+  dayLabelRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 8, marginTop: 4,
+  },
+  dayResultText: {
+    fontSize: 13, fontWeight: '600', color: colors.caramel,
+  },
+  dayRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  dayBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.cream,
+  },
+  dayBtnSel: {
+    backgroundColor: colors.caramel,
+    borderColor: colors.caramel,
+  },
+  dayBtnText: {
+    fontSize: 13, fontWeight: '600', color: colors.muted,
+  },
+  dayBtnTextSel: {
+    color: '#fff',
+  },
+
+  // Recipe card
+  recipeCardInactive: { opacity: 0.55 },
+  recipeFooter: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 6, marginBottom: spacing.lg,
+  },
+  historyToggleBtn: {
+    paddingVertical: 6, paddingHorizontal: 12,
+    borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border,
+  },
+  historyToggleText: { fontSize: 12, color: colors.brownMid },
+
+  // Delete recipe button (inside modal)
+  deleteRecipeBtn: {
+    alignSelf: 'center', marginTop: spacing.md, paddingVertical: 6,
+  },
+  deleteRecipeBtnText: { fontSize: 13, color: '#EF4444' },
+
+  // 7-day history
+  historyWrap: {
+    backgroundColor: colors.cream, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border,
+    padding: 10, marginBottom: 8,
+  },
+  historyTitle: { fontSize: 11, color: colors.muted, marginBottom: 6, fontWeight: '600' },
+  historyHeader: { flexDirection: 'row', marginBottom: 4 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 3 },
+  historyRecipeLabel: { flex: 1, fontSize: 11, color: colors.brownMid },
+  historyDateCell: { width: 28, alignItems: 'center' },
+  historyDateText: { fontSize: 10, color: colors.muted },
+  historyCell: { width: 28, alignItems: 'center' },
+  historyCellText: { fontSize: 12, fontWeight: '700' },
 });

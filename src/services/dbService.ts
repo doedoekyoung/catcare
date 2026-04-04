@@ -61,6 +61,7 @@ function toRecipe(row: any): Recipe {
     id: row.id,
     name: row.name,
     times: row.times ?? [],
+    days: row.days ?? [],
     catIds: row.cat_ids ?? [],
     active: row.active,
     householdId: row.household_id,
@@ -342,6 +343,7 @@ export async function addRecipe(
       name: data.name,
       time: data.times[0] ?? 'morning',
       times: data.times,
+      days: data.days ?? [],
       cat_ids: data.catIds,
       active: data.active,
       household_id: householdId,
@@ -363,6 +365,7 @@ export async function updateRecipe(
   const update: Record<string, any> = { updated_at: toISOString(new Date()) };
   if (data.name !== undefined) update.name = data.name;
   if (data.times !== undefined) update.times = data.times;
+  if (data.days !== undefined) update.days = data.days;
   if (data.catIds !== undefined) update.cat_ids = data.catIds;
   if (data.active !== undefined) update.active = data.active;
   if (data.memo !== undefined) update.memo = data.memo;

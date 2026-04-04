@@ -6,17 +6,16 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useStore, selectWeeklyStats } from '../store/useStore';
-import { Button, Card, SectionTitle, EmptyState } from '../components/ui';
+import { useStore } from '../store/useStore';
+import { EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { formatDisplayDate, getLast30Days, toDateKey } from '../utils/date';
-import { exportAsPDF } from '../services/exportService';
 import { getChecksForDateRange, getLogsForDateRange } from '../services/dbService';
 
 const TAG_OPTIONS = [
   { value: '#EF4444', label: '응급' },
   { value: '#F97316', label: '위험' },
-  { value: '#EAB308', label: '모니터링' },
+  { value: '#EAB308', label: '주의' },
   { value: '#22C55E', label: '안정' },
 ];
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -37,16 +36,19 @@ function toCalKey(year: number, month: number, day: number): string {
 export default function RecordsScreen() {
   const { cats, recipes, checks, logs, household } = useStore();
   const [activeTab, setActiveTab] = useState<'records' | 'posts'>('records');
-  const [exportLoading, setExportLoading] = useState(false);
   const [selectedCatFilter, setSelectedCatFilter] = useState<string | null>(null);
 
   // 과거 30일 체크 기록 (DB에서 직접 로드)
   const [historyChecks, setHistoryChecks] = useState<import('../types').CheckRecord[]>([]);
+  const [historyLogs, setHistoryLogs] = useState<import('../types').DailyLog[]>([]);
   useEffect(() => {
     if (!household?.id) return;
     const startDate = getLast30Days()[0];
     getChecksForDateRange(household.id, startDate, today)
       .then(setHistoryChecks)
+      .catch(() => {});
+    getLogsForDateRange(household.id, startDate, today)
+      .then(setHistoryLogs)
       .catch(() => {});
   }, [household?.id]);
 
@@ -54,10 +56,17 @@ export default function RecordsScreen() {
   const allChecks = useMemo(() => {
     const map: Record<string, import('../types').CheckRecord> = {};
     historyChecks.forEach((c) => { map[c.id] = c; });
-    // 오늘 데이터는 store의 실시간 값으로 덮어씀
     Object.values(checks).forEach((c) => { if (c) map[c.id] = c; });
     return map;
   }, [historyChecks, checks]);
+
+  // 전체 로그 (DB 과거 + store 오늘) 병합
+  const allLogs = useMemo(() => {
+    const map: Record<string, import('../types').DailyLog> = {};
+    historyLogs.forEach((l) => { map[l.id] = l; });
+    logs.forEach((l) => { map[l.id] = l; });
+    return Object.values(map);
+  }, [historyLogs, logs]);
 
   // Posts calendar state
   const nowDate = new Date();
@@ -67,62 +76,39 @@ export default function RecordsScreen() {
 
   const today = toDateKey();
 
-  // Collect all dates that have activity
-  const activeDates = useMemo(() => {
-    const dates = new Set<string>();
-    Object.values(allChecks).forEach((c) => c?.date && dates.add(c.date));
-    logs.forEach((l) => dates.add(l.date));
-    return [...dates].sort((a, b) => b.localeCompare(a));
-  }, [allChecks, logs]);
+  // 예외 중심: 미완료 루틴이 있거나 메모가 있는 날짜만
+  const issueDates = useMemo(() => {
+    const last30 = getLast30Days();
+    return last30.filter((date) => {
+      // 이 날짜에 메모가 있는지
+      const hasLog = allLogs.some((l) => {
+        if (l.date !== date) return false;
+        if (selectedCatFilter && l.catId && l.catId !== selectedCatFilter) return false;
+        return true;
+      });
+      if (hasLog) return true;
+      // 이 날짜에 미완료 루틴이 있는지 (스케줄된 루틴 중 체크 없거나 done=false)
+      const d = new Date(date + 'T00:00:00');
+      const dayOfWeek = d.getDay();
+      const activeR = recipes.filter((r) => {
+        if (!r.active) return false;
+        if (selectedCatFilter && !r.catIds.includes(selectedCatFilter)) return false;
+        return r.days.length === 0 || r.days.includes(dayOfWeek);
+      });
+      return activeR.some((r) =>
+        !r.catIds.some((catId) =>
+          r.times.some((t) => allChecks[`${date}_${r.id}_${catId}_${t}`]?.done)
+        )
+      );
+    }).sort((a, b) => b.localeCompare(a));
+  }, [allChecks, allLogs, recipes, selectedCatFilter]);
 
-  // Weekly stats for chart
-  const weeklyStats = useMemo(
-    () => selectWeeklyStats(recipes, allChecks, cats),
-    [recipes, allChecks, cats]
-  );
-
-  // Insight counts
-  const todayChecks = Object.values(checks).filter((c) => c?.date === today && c?.done);
-  const activeRecipes = recipes.filter((r) => r.active);
-  const streakDays = useMemo(() => calcStreak(), [activeDates]);
-
-  function calcStreak() {
-    let streak = 0;
-    const d = new Date();
-    while (streak < 365) {
-      const key =
-        d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      if (activeDates.includes(key)) { streak++; d.setDate(d.getDate() - 1); }
-      else break;
-    }
-    return streak;
-  }
-
-  const handleExport = async (format: 'pdf' | 'csv') => {
-    if (!household) return;
-    setExportLoading(true);
-    try {
-      const startDate = getLast30Days()[0];
-      const endDate = today;
-      const allChecks = await getChecksForDateRange(household.id, startDate, endDate);
-      const allLogs = await getLogsForDateRange(household.id, startDate, endDate);
-      const opts = {
-        cats, recipes, checks: allChecks, logs: allLogs,
-        startDate, endDate, householdName: household.name,
-      };
-      if (format === 'pdf') await exportAsPDF(opts);
-      else await exportAsCSV(opts);
-    } finally {
-      setExportLoading(false);
-    }
-  };
-
-  // Logs indexed by date (one per day)
+  // Logs indexed by date (one per day) — for calendar
   const logsByDate = useMemo(() => {
-    const map: Record<string, typeof logs[0]> = {};
-    logs.forEach((l) => { map[l.date] = l; });
+    const map: Record<string, typeof allLogs[0]> = {};
+    allLogs.forEach((l) => { map[l.date] = l; });
     return map;
-  }, [logs]);
+  }, [allLogs]);
 
   // Calendar cells for current month
   const calendarCells = useMemo(() => {
@@ -176,36 +162,6 @@ export default function RecordsScreen() {
       {activeTab === 'records' ? (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-          {/* Insight bar */}
-          <View style={styles.insightBar}>
-            {[
-              { num: `${todayChecks.length}/${activeRecipes.length}`, label: '오늘 완료' },
-              { num: streakDays, label: '연속 기록일' },
-              { num: activeDates.length, label: '총 기록일' },
-            ].map(({ num, label }) => (
-              <View key={label} style={[styles.insightItem, shadow.sm]}>
-                <Text style={styles.insightNum}>{num}</Text>
-                <Text style={styles.insightLabel}>{label}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Weekly completion chart */}
-          <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={styles.chartTitle}>📊 주간 완료율</Text>
-            <View style={styles.chartWrap}>
-              {weeklyStats.map(({ date, pct }) => (
-                <View key={date} style={styles.chartCol}>
-                  <Text style={styles.chartPct}>{pct > 0 ? `${pct}%` : ''}</Text>
-                  <View style={styles.chartBarBg}>
-                    <View style={[styles.chartBarFill, { height: `${pct}%` as any }]} />
-                  </View>
-                  <Text style={styles.chartDate}>{date.slice(3)}</Text>
-                </View>
-              ))}
-            </View>
-          </Card>
-
           {/* Cat filter chips */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -229,44 +185,47 @@ export default function RecordsScreen() {
             </View>
           </ScrollView>
 
-          {/* Export button */}
-          <View style={{ marginBottom: spacing.lg }}>
-            <Button
-              label="📄 리포트 내보내기 (PDF)"
-              variant="secondary"
-              size="sm"
-              loading={exportLoading}
-              onPress={() => handleExport('pdf')}
-            />
-          </View>
-
-          {/* Timeline */}
-          {activeDates.length === 0 && (
+          {/* 예외 중심 타임라인 */}
+          {issueDates.length === 0 && (
             <EmptyState
-              emoji="📓"
-              title="기록이 아직 없어요"
-              desc="체크리스트를 완료하거나 메모를 작성하면 여기에 기록이 쌓여요"
+              emoji="✓"
+              title="최근 30일 이슈 없음"
+              desc="미완료 루틴이나 메모가 없어요. 잘 돌보고 있어요!"
             />
           )}
 
-          {activeDates.map((date) => {
-            const dayChecks = Object.values(allChecks)
-              .filter((c) => {
-                if (c?.date !== date) return false;
-                if (selectedCatFilter && c?.catId !== selectedCatFilter) return false;
-                return c?.done;
-              });
-            const dayLogs = logs.filter((l) => {
+          {issueDates.map((date) => {
+            const d = new Date(date + 'T00:00:00');
+            const dayOfWeek = d.getDay();
+
+            const dayLogs = allLogs.filter((l) => {
               if (l.date !== date) return false;
               if (selectedCatFilter && l.catId && l.catId !== selectedCatFilter) return false;
               return true;
             });
-            if (dayChecks.length === 0 && dayLogs.length === 0) return null;
+
+            const missedItems: { recipeName: string; catName: string }[] = [];
+            recipes.forEach((r) => {
+              if (!r.active) return;
+              if (selectedCatFilter && !r.catIds.includes(selectedCatFilter)) return;
+              const scheduled = r.days.length === 0 || r.days.includes(dayOfWeek);
+              if (!scheduled) return;
+              r.catIds.forEach((catId) => {
+                if (selectedCatFilter && catId !== selectedCatFilter) return;
+                const done = r.times.some((t) => allChecks[`${date}_${r.id}_${catId}_${t}`]?.done);
+                if (!done) {
+                  const catName = cats.find((c) => c.id === catId)?.name ?? '';
+                  missedItems.push({ recipeName: r.name, catName });
+                }
+              });
+            });
+
+            if (dayLogs.length === 0 && missedItems.length === 0) return null;
 
             return (
               <View key={date} style={[styles.logEntry, shadow.sm]}>
                 <View style={styles.logDateHeader}>
-                  <Text style={styles.logDateText}>📅 {formatDisplayDate(date)}</Text>
+                  <Text style={styles.logDateText}>{formatDisplayDate(date)}</Text>
                   {date === today && (
                     <View style={styles.todayBadge}>
                       <Text style={styles.todayBadgeText}>오늘</Text>
@@ -274,32 +233,29 @@ export default function RecordsScreen() {
                   )}
                 </View>
                 <View style={styles.logContent}>
-                  {dayChecks.length > 0 && (
-                    <>
-                      <Text style={styles.logSubLabel}>완료한 항목</Text>
-                      <View style={styles.tagRow}>
-                        {dayChecks.map((c) => {
-                          const recipe = recipes.find((r) => r.id === c?.recipeId);
-                          return recipe ? (
-                            <View key={c.id} style={styles.doneTag}>
-                              <Text style={styles.doneTagText}>✓ {recipe.name}</Text>
-                            </View>
-                          ) : null;
-                        })}
-                      </View>
-                    </>
-                  )}
+                  {/* 메모 먼저 */}
                   {dayLogs.map((l) => (
-                    <View key={l.id}>
+                    <View key={l.id} style={styles.logMemoBlock}>
                       {l.tagColor && (
                         <View style={[styles.logTagBadge, { backgroundColor: l.tagColor + '20', borderColor: l.tagColor }]}>
                           <View style={[styles.logTagDot, { backgroundColor: l.tagColor }]} />
                           <Text style={[styles.logTagText, { color: l.tagColor }]}>
                             {TAG_OPTIONS.find((t) => t.value === l.tagColor)?.label ?? ''}
+                            {l.catId ? ` · ${cats.find((c) => c.id === l.catId)?.name ?? ''}` : ''}
                           </Text>
                         </View>
                       )}
                       <Text style={styles.logText}>{l.text}</Text>
+                    </View>
+                  ))}
+                  {/* 미완료 항목 */}
+                  {missedItems.map((item, i) => (
+                    <View key={i} style={styles.missedItem}>
+                      <Text style={styles.missedMark}>✗</Text>
+                      <Text style={styles.missedText}>
+                        <Text style={styles.missedCat}>{item.catName}</Text>
+                        {'  '}{item.recipeName}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -436,24 +392,6 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 14, color: colors.muted },
   tabTextActive: { color: colors.caramel, fontWeight: '600' },
   content: { padding: spacing.lg, paddingBottom: 80 },
-  insightBar: { flexDirection: 'row', gap: 10, marginBottom: spacing.lg },
-  insightItem: {
-    flex: 1, backgroundColor: colors.cream, borderRadius: radius.md,
-    padding: spacing.md, alignItems: 'center',
-    borderWidth: 1.5, borderColor: colors.border,
-  },
-  insightNum: { fontSize: 24, fontWeight: '800', color: colors.caramel },
-  insightLabel: { fontSize: 11, color: colors.muted, marginTop: 2 },
-  chartTitle: { fontSize: 14, fontWeight: '600', color: colors.brownMid, marginBottom: spacing.md },
-  chartWrap: { flexDirection: 'row', alignItems: 'flex-end', height: 100, gap: 6 },
-  chartCol: { flex: 1, alignItems: 'center', height: 100, justifyContent: 'flex-end' },
-  chartPct: { fontSize: 9, color: colors.caramel, marginBottom: 2 },
-  chartBarBg: {
-    width: '100%', height: 70, backgroundColor: colors.sand,
-    borderRadius: 4, overflow: 'hidden', justifyContent: 'flex-end',
-  },
-  chartBarFill: { width: '100%', backgroundColor: colors.caramel, borderRadius: 4 },
-  chartDate: { fontSize: 9, color: colors.muted, marginTop: 4 },
   filterChip: {
     paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.full,
     backgroundColor: colors.cream, borderWidth: 1.5, borderColor: colors.border,
@@ -461,7 +399,6 @@ const styles = StyleSheet.create({
   filterChipSel: { backgroundColor: colors.caramel, borderColor: colors.caramel },
   filterChipText: { fontSize: 13, color: colors.brownMid },
   filterChipTextSel: { color: '#fff' },
-  row: { flexDirection: 'row', gap: 10 },
   logEntry: {
     borderWidth: 1.5, borderColor: colors.border,
     borderRadius: radius.md, backgroundColor: '#fff', marginBottom: 12, overflow: 'hidden',
@@ -477,13 +414,14 @@ const styles = StyleSheet.create({
   },
   todayBadgeText: { fontSize: 11, color: '#fff' },
   logContent: { padding: 14 },
-  logSubLabel: { fontSize: 12, color: colors.muted, marginBottom: 8 },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  doneTag: {
-    backgroundColor: '#F0FDF4', paddingVertical: 4, paddingHorizontal: 10,
-    borderRadius: radius.full, borderWidth: 1, borderColor: '#C8E6C9',
+  logMemoBlock: { marginBottom: 10 },
+  missedItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 4,
   },
-  doneTagText: { fontSize: 11, color: '#2E7D32' },
+  missedMark: { fontSize: 14, color: '#EF4444', fontWeight: '700', width: 16 },
+  missedText: { fontSize: 13, color: colors.charcoal, flex: 1 },
+  missedCat: { color: colors.caramel, fontWeight: '600' },
   logTagBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
     borderWidth: 1, borderRadius: radius.full, paddingVertical: 3, paddingHorizontal: 8, marginBottom: 6,
