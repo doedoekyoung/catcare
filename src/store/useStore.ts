@@ -57,13 +57,20 @@ export const useStore = create<AppState>((set, get) => ({
 
 export const selectActiveRecipesForCats = (
   recipes: Recipe[],
-  catIds: string[]
-): Recipe[] =>
-  catIds.length === 0
-    ? []
-    : recipes.filter(
-        (r) => r.active && r.catIds.some((cid) => catIds.includes(cid))
-      );
+  catIds: string[],
+  date?: string
+): Recipe[] => {
+  if (catIds.length === 0) return [];
+  const dow = date
+    ? new Date(date + 'T00:00:00').getDay()
+    : null;
+  return recipes.filter((r) => {
+    if (!r.active) return false;
+    if (!r.catIds.some((cid) => catIds.includes(cid))) return false;
+    if (dow !== null && (r.days ?? []).length > 0 && !(r.days ?? []).includes(dow)) return false;
+    return true;
+  });
+};
 
 export const selectChecksForDate = (
   checks: Record<string, CheckRecord>,
@@ -82,7 +89,7 @@ export const selectCompletionRate = (
   date: string,
   catIds: string[]
 ): { done: number; total: number; pct: number } => {
-  const active = selectActiveRecipesForCats(recipes, catIds);
+  const active = selectActiveRecipesForCats(recipes, catIds, date);
   let total = 0;
   let done = 0;
   active.forEach((r) => {

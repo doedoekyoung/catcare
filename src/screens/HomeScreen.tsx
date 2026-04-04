@@ -74,7 +74,7 @@ export default function HomeScreen() {
   const [refreshing] = useState(false);
 
   const today = toDateKey();
-  const activeRecipes = selectActiveRecipesForCats(recipes, selectedCatIds);
+  const activeRecipes = selectActiveRecipesForCats(recipes, selectedCatIds, today);
   const { done, total, pct } = selectCompletionRate(recipes, checks, today, selectedCatIds);
   const todayLog = logs.find((l) => l.date === today);
 
