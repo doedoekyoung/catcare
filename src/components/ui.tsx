@@ -155,16 +155,40 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
 
   if (Platform.OS === 'web') {
     if (!visible) return null;
-    // createPortal로 document.body에 직접 렌더링
-    // → GestureHandlerRootView 등 부모의 transform이 만드는 stacking context 우회
     const { createPortal } = require('react-dom');
+    // Pressable 대신 native onClick 사용 — portal된 DOM에서 RN 이벤트가 불안정함
     return createPortal(
-      <View style={styles.overlayFixed} pointerEvents="box-none">
-        <Pressable style={styles.overlayTouchable} onPress={onClose} />
-        <View style={[styles.sheet, { maxHeight: maxSheetHeight }]}>
-          {sheetContent}
-        </View>
-      </View>,
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 9999,
+          display: 'flex', flexDirection: 'column',
+          justifyContent: 'flex-end', alignItems: 'center',
+          backgroundColor: 'rgba(44,36,32,0.4)',
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: '100%', maxWidth: 430,
+            maxHeight: maxSheetHeight,
+            backgroundColor: '#FFFDF9',
+            borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            padding: 20,
+            display: 'flex', flexDirection: 'column',
+            overflowY: 'auto',
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* handle */}
+          <div style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2D5C8', alignSelf: 'center', margin: '0 auto 20px' }} />
+          {title && <div style={{ fontSize: 20, fontWeight: '700', color: '#2C2420', marginBottom: 20 }}>{title}</div>}
+          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: bottomPad }}>
+            {children}
+          </div>
+        </div>
+      </div>,
       document.body
     );
   }
