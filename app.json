@@ -38,7 +38,8 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "lang": "ko"
     },
     "plugins": [
       [
