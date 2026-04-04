@@ -33,11 +33,12 @@ interface ButtonProps {
   loading?: boolean;
   icon?: React.ReactNode;
   style?: ViewStyle;
+  testID?: string;
 }
 
 export function Button({
   label, onPress, variant = 'primary', size = 'md',
-  fullWidth, disabled, loading, icon, style,
+  fullWidth, disabled, loading, icon, style, testID,
 }: ButtonProps) {
   const btnStyle = [
     styles.btn,
@@ -53,6 +54,7 @@ export function Button({
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.75}
+      testID={testID}
     >
       {loading ? (
         <ActivityIndicator size="small" color={variant === 'primary' ? '#fff' : colors.caramel} />

@@ -146,7 +146,7 @@ export default function HomeScreen() {
               <Text style={styles.doneBadgeText}>{done} / {total}</Text>
             </View>
           )}
-          <TouchableOpacity style={styles.logBtn} onPress={openLogModal}>
+          <TouchableOpacity testID="home-log-button" style={styles.logBtn} onPress={openLogModal}>
             <Text style={{ fontSize: 16 }}>✏</Text>
           </TouchableOpacity>
         </View>
@@ -232,6 +232,7 @@ export default function HomeScreen() {
                   .filter(Boolean).join(', ');
                 return (
                   <TouchableOpacity
+                    testID={`home-check-${recipe.id}-${t}`}
                     key={`${recipe.id}-${t}`}
                     style={[
                       styles.checkItem,
@@ -328,6 +329,7 @@ export default function HomeScreen() {
           </View>
         )}
         <Input
+          testID="log-form-text-input"
           label="특이사항 메모"
           value={logText}
           onChangeText={setLogText}
@@ -359,7 +361,7 @@ export default function HomeScreen() {
         </View>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.md }}>
           <Button label="취소" variant="secondary" onPress={() => setLogModalVisible(false)} style={{ flex: 1 }} />
-          <Button label="저장" variant="primary" onPress={handleSaveLog} style={{ flex: 1 }} />
+          <Button testID="log-form-save-button" label="저장" variant="primary" onPress={handleSaveLog} style={{ flex: 1 }} />
         </View>
       </BottomSheet>
     </SafeAreaView>

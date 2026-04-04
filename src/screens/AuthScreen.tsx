@@ -69,12 +69,14 @@ export default function AuthScreen() {
 
           <View style={styles.tabs}>
             <TouchableOpacity
+              testID="auth-tab-login"
               style={[styles.tab, mode === 'login' && styles.tabActive]}
               onPress={() => { setMode('login'); setError(''); }}
             >
               <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>로그인</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="auth-tab-signup"
               style={[styles.tab, mode === 'signup' && styles.tabActive]}
               onPress={() => { setMode('signup'); setError(''); }}
             >
@@ -83,6 +85,7 @@ export default function AuthScreen() {
           </View>
 
           <Input
+            testID="auth-email-input"
             label="이메일"
             value={email}
             onChangeText={setEmail}
@@ -94,6 +97,7 @@ export default function AuthScreen() {
             blurOnSubmit={false}
           />
           <Input
+            testID="auth-password-input"
             ref={passwordRef}
             label="비밀번호"
             value={password}
@@ -106,6 +110,7 @@ export default function AuthScreen() {
           />
           {mode === 'signup' && (
             <Input
+              testID="auth-name-input"
               ref={nameRef}
               label="이름 *"
               value={name}
@@ -116,9 +121,10 @@ export default function AuthScreen() {
             />
           )}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <Text testID="auth-error-text" style={styles.error}>{error}</Text> : null}
 
           <Button
+            testID="auth-submit-button"
             label={mode === 'login' ? '로그인' : '회원가입'}
             onPress={mode === 'login' ? handleLogin : handleSignUp}
             loading={loading}

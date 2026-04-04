@@ -7,7 +7,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build": "expo export --platform web"
+    "build": "expo export --platform web",
+    "test:e2e": "npx playwright test --config=e2e/playwright.config.ts",
+    "test:e2e:ui": "npx playwright test --config=e2e/playwright.config.ts --ui",
+    "test:e2e:headed": "npx playwright test --config=e2e/playwright.config.ts --headed"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.3",
@@ -38,7 +41,10 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
+    "@playwright/test": "^1.59.1",
     "@types/react": "~18.2.79",
+    "dotenv": "^17.4.0",
+    "serve": "^14.2.6",
     "typescript": "^5.3.3"
   }
 }

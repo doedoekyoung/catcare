@@ -11,9 +11,39 @@ npm run start            # Expo 개발 서버 (Expo Go)
 npm run build            # Vercel용 웹 빌드 (expo export --platform web)
 npm run ios              # iOS 시뮬레이터
 npm run android          # Android 에뮬레이터
+npm run test:e2e         # E2E 테스트 실행 (headless)
+npm run test:e2e:headed  # E2E 테스트 실행 (브라우저 표시)
+npm run test:e2e:ui      # Playwright UI 모드
 ```
 
 패키지 추가 시 peer dependency 충돌이 있으면 `--legacy-peer-deps` 필요.
+
+## E2E 테스트
+
+**코드 변경 후 반드시 `npm run test:e2e`를 실행하여 모든 테스트가 통과하는지 확인해야 한다.** 테스트가 실패하는 상태로 커밋하지 않는다.
+
+- **프레임워크**: Playwright (Chromium)
+- **테스트 대상**: 빌드된 웹 앱 (`dist/`)을 `serve`로 제공
+- **사전 조건**: `npm run build`로 빌드가 완료되어 있어야 함
+- **환경변수**: `.env.local` (Supabase URL/KEY) + `.env.test` (테스트 계정 정보)
+
+### 테스트 구조 (`e2e/`)
+| 파일 | 내용 |
+|------|------|
+| `tests/01-auth.spec.ts` | 로그인/회원가입 |
+| `tests/02-cat-crud.spec.ts` | 고양이 등록/수정/삭제 |
+| `tests/03-routine-crud.spec.ts` | 루틴 등록/수정/삭제 |
+| `tests/04-routine-check.spec.ts` | 홈 체크 토글 |
+| `tests/05-log-crud.spec.ts` | 메모 작성/수정 |
+| `helpers/auth.ts` | 로그인 헬퍼 (`ensureLoggedIn`) |
+| `helpers/cleanup.ts` | Supabase API로 테스트 데이터 정리 |
+| `helpers/selectors.ts` | testID 셀렉터 모음 |
+| `helpers/test-data.ts` | 테스트 데이터 상수 |
+
+### testID 규칙
+- 네이밍: `{screen}-{element}-{qualifier}` (예: `cat-form-name-input`)
+- React Native Web에서 `testID`는 `data-testid`로 렌더링됨
+- 새 UI 요소 추가 시 E2E 테스트에서 사용할 `testID`를 함께 추가할 것
 
 ## 아키텍처
 

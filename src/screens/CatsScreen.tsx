@@ -472,7 +472,7 @@ export default function CatsScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>고양이 관리</Text>
-        <Button label="+ 고양이" size="sm" onPress={openAddCat} />
+        <Button testID="cats-add-button" label="+ 고양이" size="sm" onPress={openAddCat} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -495,9 +495,9 @@ export default function CatsScreen() {
           const metaParts = [genderLabel, cat.birthYear ? `${cat.birthYear}년생` : '', `루틴 ${catRecipes.length}개`].filter(Boolean);
 
           return (
-            <View key={cat.id} style={[styles.catCard, shadow.sm, isExpanded && { borderColor: tagColor }]}>
+            <View key={cat.id} testID={`cats-card-${cat.id}`} style={[styles.catCard, shadow.sm, isExpanded && { borderColor: tagColor }]}>
               {/* Cat row — tap to expand */}
-              <TouchableOpacity style={styles.catRow} onPress={() => handleToggleExpand(cat.id)} activeOpacity={0.75}>
+              <TouchableOpacity testID={`cats-expand-${cat.id}`} style={styles.catRow} onPress={() => handleToggleExpand(cat.id)} activeOpacity={0.75}>
                 <View style={[styles.catAvatar, { backgroundColor: tagColor + '20', borderColor: tagColor }]}>
                   {cat.photoUri ? (
                     <Image source={{ uri: cat.photoUri }} style={styles.catAvatarImg} />
@@ -544,6 +544,7 @@ export default function CatsScreen() {
                         </View>
                       </TouchableOpacity>
                       <Switch
+                        testID={`recipe-toggle-${r.id}`}
                         value={r.active}
                         onValueChange={() => handleToggleActive(r)}
                         thumbColor={r.active ? '#fff' : '#ccc'}
@@ -551,7 +552,7 @@ export default function CatsScreen() {
                       />
                     </View>
                   ))}
-                  <TouchableOpacity style={styles.routineAddBtn} onPress={() => openAddRecipe(cat.id)}>
+                  <TouchableOpacity testID={`cats-add-recipe-${cat.id}`} style={styles.routineAddBtn} onPress={() => openAddRecipe(cat.id)}>
                     <Text style={styles.routineAddText}>+ 루틴 추가</Text>
                   </TouchableOpacity>
                 </View>
@@ -596,6 +597,7 @@ export default function CatsScreen() {
 
           {/* 이름 */}
           <Input
+            testID="cat-form-name-input"
             label="이름 *"
             value={catName}
             onChangeText={setCatName}
@@ -607,12 +609,14 @@ export default function CatsScreen() {
           <Text style={styles.fieldLabel}>성별 *</Text>
           <View style={styles.optionRow}>
             <TouchableOpacity
+              testID="cat-form-gender-male"
               style={[styles.optionChip, catGender === 'male' && styles.optionChipSel]}
               onPress={() => setCatGender('male')}
             >
               <Text style={[styles.optionText, catGender === 'male' && styles.optionTextSel]}>남아</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="cat-form-gender-female"
               style={[styles.optionChip, catGender === 'female' && styles.optionChipSel]}
               onPress={() => setCatGender('female')}
             >
@@ -673,10 +677,11 @@ export default function CatsScreen() {
 
           <View style={[styles.row, { marginTop: spacing.md }]}>
             <Button label="취소" variant="secondary" onPress={() => setCatModal(false)} style={{ flex: 1 }} />
-            <Button label={editingCat ? '수정' : '등록'} onPress={handleSaveCat} style={{ flex: 1 }} />
+            <Button testID="cat-form-save-button" label={editingCat ? '수정' : '등록'} onPress={handleSaveCat} style={{ flex: 1 }} />
           </View>
           {editingCat && (
             <TouchableOpacity
+              testID="cat-form-delete-button"
               style={styles.deleteRecipeBtn}
               onPress={() => { setCatModal(false); setTimeout(() => handleDeleteCat(editingCat), 300); }}
             >
@@ -693,6 +698,7 @@ export default function CatsScreen() {
         title={editingRecipe ? '루틴 수정' : '루틴 항목 등록'}
       >
         <Input
+          testID="recipe-form-name-input"
           label="항목명 *"
           value={recipeName}
           onChangeText={setRecipeName}
@@ -760,10 +766,11 @@ export default function CatsScreen() {
         </View>
         <View style={[styles.row, { marginTop: spacing.md }]}>
           <Button label="취소" variant="secondary" onPress={() => setRecipeModal(false)} style={{ flex: 1 }} />
-          <Button label={editingRecipe ? '수정' : '등록'} onPress={handleSaveRecipe} style={{ flex: 1 }} />
+          <Button testID="recipe-form-save-button" label={editingRecipe ? '수정' : '등록'} onPress={handleSaveRecipe} style={{ flex: 1 }} />
         </View>
         {editingRecipe && (
           <TouchableOpacity
+            testID="recipe-form-delete-button"
             style={styles.deleteRecipeBtn}
             onPress={() => {
               setRecipeModal(false);
