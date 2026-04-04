@@ -695,7 +695,6 @@ export default function CatsScreen() {
               <Text style={styles.deleteRecipeBtnText}>이 고양이 삭제</Text>
             </TouchableOpacity>
           )}
-          </View>
         </ScrollView>
       </BottomSheet>
 
