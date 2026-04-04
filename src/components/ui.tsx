@@ -267,6 +267,7 @@ const styles = StyleSheet.create({
     top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 9999,
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   overlayTouchable: {
     position: 'absolute' as any,
@@ -276,6 +277,7 @@ const styles = StyleSheet.create({
   sheet: {
     backgroundColor: colors.warmWhite, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl,
     padding: spacing.lg, paddingBottom: 40, maxHeight: '85%',
+    width: '100%', maxWidth: 430,
   },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.lg },
   sheetTitle: { fontSize: 20, fontWeight: '700', color: colors.charcoal, marginBottom: spacing.lg },
