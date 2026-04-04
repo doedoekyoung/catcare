@@ -438,8 +438,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warmWhite,
   },
   tab: {
-    flex: 1, alignItems: 'center', paddingVertical: 12,
-    borderBottomWidth: 2, borderBottomColor: 'transparent',
+    flex: 1, alignItems: 'center', paddingVertical: 10,
+    borderBottomWidth: 2.5, borderBottomColor: 'transparent',
   },
   tabActive: { borderBottomColor: colors.caramel },
   tabText: { fontSize: 14, color: colors.muted },

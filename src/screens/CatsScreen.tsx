@@ -471,10 +471,7 @@ export default function CatsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>고양이 관리</Text>
-          <Text style={styles.headerSub}>등록된 고양이 & 루틴</Text>
-        </View>
+        <Text style={styles.headerTitle}>고양이 관리</Text>
         <Button label="+ 고양이" size="sm" onPress={openAddCat} />
       </View>
 
@@ -787,12 +784,11 @@ export default function CatsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.warmWhite },
   header: {
-    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
     borderBottomWidth: 1.5, borderBottomColor: colors.border,
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: colors.charcoal },
-  headerSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   content: { padding: spacing.lg, paddingBottom: 80 },
 
   // Cat card

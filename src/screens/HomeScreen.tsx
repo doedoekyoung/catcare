@@ -139,10 +139,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.dateLabel}>{formatDisplayDate(today)}</Text>
-          <Text style={styles.greeting}>오늘의 돌봄 루틴</Text>
-        </View>
+        <Text style={styles.greeting}>오늘의 돌봄 루틴</Text>
         <View style={styles.headerRight}>
           {total > 0 && (
             <View style={[styles.doneBadge, pct === 100 && { backgroundColor: colors.sage }]}>
@@ -154,6 +151,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
 
       {/* 고양이 탭바 */}
       {cats.length > 0 && (
@@ -371,11 +369,10 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.warmWhite },
   header: {
-    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
     borderBottomWidth: 1.5, borderBottomColor: colors.border,
   },
-  dateLabel: { fontSize: 12, color: colors.muted, marginBottom: 2 },
   greeting: { fontSize: 20, fontWeight: '700', color: colors.charcoal },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   doneBadge: {
