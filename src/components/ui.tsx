@@ -13,6 +13,7 @@ import {
   ScrollView,
   Pressable,
   Platform,
+  Dimensions,
   type TextInputProps,
   type ViewStyle,
   type TextStyle,
@@ -135,23 +136,30 @@ interface SheetProps {
 
 export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
   const insets = useSafeAreaInsets();
-  const bottomPad = Math.max(insets.bottom, spacing.lg);
+  const bottomPad = Math.max(insets.bottom, spacing.md);
+  const maxSheetHeight = Dimensions.get('window').height * 0.88;
+
+  const sheetContent = (
+    <>
+      <View style={styles.sheetHandle} />
+      {title && <Text style={styles.sheetTitle}>{title}</Text>}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: bottomPad }}
+      >
+        {children}
+      </ScrollView>
+    </>
+  );
 
   if (Platform.OS === 'web') {
     if (!visible) return null;
     return (
       <View style={styles.overlayFixed} pointerEvents="box-none">
         <Pressable style={styles.overlayTouchable} onPress={onClose} />
-        <View style={[styles.sheet, { paddingBottom: bottomPad }]}>
-          <View style={styles.sheetHandle} />
-          {title && <Text style={styles.sheetTitle}>{title}</Text>}
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: spacing.md }}
-          >
-            {children}
-          </ScrollView>
+        <View style={[styles.sheet, { maxHeight: maxSheetHeight }]}>
+          {sheetContent}
         </View>
       </View>
     );
@@ -164,16 +172,8 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
       onRequestClose={onClose}
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={[styles.sheet, { paddingBottom: bottomPad }]} onPress={() => {}}>
-          <View style={styles.sheetHandle} />
-          {title && <Text style={styles.sheetTitle}>{title}</Text>}
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: spacing.md }}
-          >
-            {children}
-          </ScrollView>
+        <Pressable style={[styles.sheet, { maxHeight: maxSheetHeight }]} onPress={() => {}}>
+          {sheetContent}
         </Pressable>
       </Pressable>
     </Modal>

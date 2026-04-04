@@ -624,7 +624,6 @@ export default function CatsScreen() {
           <Text style={styles.fieldLabel}>생년월일/만난 날</Text>
           <View style={styles.pickerRow}>
             <View style={styles.pickerCol}>
-              <Text style={styles.pickerLabel}>년</Text>
               <DateDropdown
                 values={YEAR_VALUES}
                 nativeValues={YEARS}
@@ -636,7 +635,6 @@ export default function CatsScreen() {
               />
             </View>
             <View style={styles.pickerCol}>
-              <Text style={styles.pickerLabel}>월</Text>
               <DateDropdown
                 values={MONTH_VALUES}
                 nativeValues={MONTHS}
@@ -649,7 +647,6 @@ export default function CatsScreen() {
               />
             </View>
             <View style={styles.pickerCol}>
-              <Text style={styles.pickerLabel}>일</Text>
               <DateDropdown
                 values={DAY_VALUES}
                 nativeValues={DAYS}
