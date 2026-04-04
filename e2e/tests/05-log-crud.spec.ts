@@ -27,8 +27,6 @@ test.describe.serial('Log CRUD', () => {
 
     await page.getByTestId(sel.logFormTextInput).fill(TEST_LOG.text);
     await page.getByTestId(sel.logFormSaveButton).click();
-
-    // 모달이 닫힐 때까지 대기
     await expect(page.getByTestId(sel.logFormSaveButton)).not.toBeVisible({ timeout: 10_000 });
 
     await page.reload();
@@ -39,9 +37,8 @@ test.describe.serial('Log CRUD', () => {
   test('메모 수정', async ({ page }) => {
     await ensureLoggedIn(page);
 
-    // 기존 메모의 "수정" 버튼 클릭
     await expect(page.getByText(TEST_LOG.text)).toBeVisible({ timeout: 10_000 });
-    await page.getByText('수정', { exact: true }).click();
+    await page.getByText('수정', { exact: true }).first().click();
     await expect(page.getByTestId(sel.logFormTextInput)).toBeVisible();
 
     const input = page.getByTestId(sel.logFormTextInput);
@@ -50,12 +47,33 @@ test.describe.serial('Log CRUD', () => {
     await input.clear();
     await input.fill(TEST_LOG.editedText);
     await page.getByTestId(sel.logFormSaveButton).click();
-
-    // 모달이 닫힐 때까지 대기 (저장 완료 확인)
     await expect(page.getByTestId(sel.logFormSaveButton)).not.toBeVisible({ timeout: 10_000 });
 
     await page.reload();
     await ensureLoggedIn(page);
     await expect(page.getByText(TEST_LOG.editedText)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('복수 메모 추가 후 모두 표시', async ({ page }) => {
+    await ensureLoggedIn(page);
+    await expect(page.getByText(TEST_LOG.editedText)).toBeVisible({ timeout: 10_000 });
+
+    // "+ 메모 추가" 버튼으로 두번째 메모 작성
+    await page.getByText('+ 메모 추가').click();
+    await expect(page.getByTestId(sel.logFormTextInput)).toBeVisible();
+
+    await page.getByTestId(sel.logFormTextInput).fill(TEST_LOG.secondText);
+    await page.getByTestId(sel.logFormSaveButton).click();
+    await expect(page.getByTestId(sel.logFormSaveButton)).not.toBeVisible({ timeout: 10_000 });
+
+    // 두 메모가 모두 홈에 표시
+    await expect(page.getByText(TEST_LOG.editedText)).toBeVisible();
+    await expect(page.getByText(TEST_LOG.secondText)).toBeVisible();
+
+    // 새로고침 후에도 유지
+    await page.reload();
+    await ensureLoggedIn(page);
+    await expect(page.getByText(TEST_LOG.editedText)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(TEST_LOG.secondText)).toBeVisible({ timeout: 10_000 });
   });
 });

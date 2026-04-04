@@ -16,4 +16,5 @@ export const TEST_RECIPE = {
 export const TEST_LOG = {
   text: 'E2E 테스트 메모입니다',
   editedText: 'E2E 테스트 메모 수정',
+  secondText: 'E2E 두번째 메모입니다',
 };
