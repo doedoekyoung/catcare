@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { sel } from '../helpers/selectors';
-import { TEST_EMAIL, TEST_PASSWORD } from '../helpers/test-data';
+import { TEST_EMAIL, TEST_PASSWORD, SIGNUP_TEST_EMAIL, SIGNUP_TEST_PASSWORD, SIGNUP_TEST_NAME } from '../helpers/test-data';
+import { cleanupSignupTestUser } from '../helpers/cleanup';
 
 test.describe.serial('Auth', () => {
   // 이 테스트 그룹은 storageState 없이 실행 (로그인 자체를 테스트)
@@ -31,12 +32,35 @@ test.describe.serial('Auth', () => {
     await expect(page.getByText('오늘의 돌봄 루틴')).toBeVisible({ timeout: 15_000 });
   });
 
+  test('회원가입 → 홈 화면 이동', async ({ page }) => {
+    // 사전 정리: 이전 실행에서 남은 테스트 계정 삭제
+    await cleanupSignupTestUser(SIGNUP_TEST_EMAIL);
+
+    // 이전 테스트 세션이 남아있을 수 있으므로 완전 초기화
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+
+    await page.getByTestId(sel.authTabSignup).waitFor({ timeout: 10_000 });
+    await page.getByTestId(sel.authTabSignup).click();
+    await expect(page.getByTestId(sel.authNameInput)).toBeVisible();
+
+    await page.getByTestId(sel.authEmailInput).fill(SIGNUP_TEST_EMAIL);
+    await page.getByTestId(sel.authPasswordInput).fill(SIGNUP_TEST_PASSWORD);
+    await page.getByTestId(sel.authNameInput).fill(SIGNUP_TEST_NAME);
+    await page.getByTestId(sel.authSubmitButton).click();
+
+    // 홈 화면 진입 확인
+    await expect(page.getByText('오늘의 돌봄 루틴')).toBeVisible({ timeout: 20_000 });
+
+    // 사후 정리: 테스트 계정 삭제
+    await cleanupSignupTestUser(SIGNUP_TEST_EMAIL);
+  });
+
   test('회원가입 탭 전환', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId(sel.authTabSignup).click();
-    // 이름 필드가 나타나야 함
     await expect(page.getByTestId(sel.authNameInput)).toBeVisible();
-    // 다시 로그인 탭으로 전환
     await page.getByTestId(sel.authTabLogin).click();
     await expect(page.getByTestId(sel.authNameInput)).not.toBeVisible();
   });

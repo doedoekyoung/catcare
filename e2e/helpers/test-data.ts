@@ -3,6 +3,10 @@ export const TEST_EMAIL = process.env.E2E_TEST_EMAIL || 'e2e-test@catcare.test';
 export const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD || 'TestPass123!';
 export const TEST_NAME = 'E2E집사';
 
+export const SIGNUP_TEST_EMAIL = 'e2e-signup-test@catcare.test';
+export const SIGNUP_TEST_PASSWORD = 'SignupTest123!';
+export const SIGNUP_TEST_NAME = 'E2E가입집사';
+
 export const TEST_CAT = {
   name: 'E2E냥이',
   editedName: 'E2E수정냥이',

@@ -104,14 +104,13 @@ function toDailyLog(row: any): DailyLog {
 // ── Users ──────────────────────────────────────────────────────────────────────
 
 export async function upsertUser(user: User): Promise<void> {
-  const { error } = await supabase.from(TABLES.USERS).upsert({
-    uid: user.uid,
+  const { error } = await supabase.from(TABLES.USERS).update({
     email: user.email,
     display_name: user.displayName,
     photo_url: user.photoURL,
     household_id: user.householdId ?? null,
     role: user.role,
-  });
+  }).eq('uid', user.uid);
   if (error) throw error;
 }
 

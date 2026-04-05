@@ -8,18 +8,27 @@ export async function signUpWithEmail(
   password: string,
   displayName: string
 ): Promise<User> {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // signUp 시 display_name을 메타데이터로 전달 → DB 트리거가 public.users 자동 생성
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { display_name: displayName } },
+  });
   if (error) throw error;
   if (!data.user) throw new Error('회원가입에 실패했습니다.');
 
-  const user: User = {
+  // signUp이 세션을 반환하지 않으면 명시적으로 로그인
+  if (!data.session) {
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) throw signInError;
+  }
+
+  return {
     uid: data.user.id,
     email,
     displayName,
     role: 'owner',
   };
-  await upsertUser(user);
-  return user;
 }
 
 export async function signInWithEmail(
