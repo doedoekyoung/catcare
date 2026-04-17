@@ -126,7 +126,3 @@ export function subscribeToAuthState(
   return () => subscription.unsubscribe();
 }
 
-export async function signInAsGuest(): Promise<void> {
-  const { error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
-}

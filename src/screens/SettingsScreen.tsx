@@ -25,6 +25,16 @@ function webAlert(title: string, message?: string) {
     Alert.alert(title, message);
   }
 }
+
+// 공유 URL을 현재 실행 환경에 맞게 생성.
+// 웹: 현재 origin 사용 (로컬 dev·vercel preview·프로덕션 모두 대응). 네이티브: 프로덕션 도메인.
+const PROD_WEB_ORIGIN = 'https://catcare.app';
+function buildShareUrl(token: string): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/share/${token}`;
+  }
+  return `${PROD_WEB_ORIGIN}/share/${token}`;
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { signOut } from '../services/authService';
@@ -125,9 +135,9 @@ export default function SettingsScreen() {
         token = await regenerateShareToken(household.id);
         setHousehold({ ...household, shareToken: token });
       }
-      const url = `https://catcare.app/share/${token}`;
+      const url = buildShareUrl(token);
       await Share.share({
-        message: `CatCare 공유 링크\n\n${url}\n\n이 링크로 오늘의 고양이 체크리스트를 확인하고 체크할 수 있습니다 🐱\n(7일 유효)`,
+        message: `CatCare 공유 링크\n\n${url}\n\n이 링크로 오늘의 고양이 체크리스트를 확인하고 체크할 수 있습니다.\n(7일 유효)`,
         title: 'CatCare 인수인계 공유',
       });
     } finally {
@@ -263,7 +273,7 @@ export default function SettingsScreen() {
             {household?.shareToken && (
               <View style={styles.tokenBox}>
                 <Text style={styles.tokenText} numberOfLines={1} ellipsizeMode="tail">
-                  catcare.app/share/{household.shareToken}
+                  {buildShareUrl(household.shareToken).replace(/^https?:\/\//, '')}
                 </Text>
               </View>
             )}

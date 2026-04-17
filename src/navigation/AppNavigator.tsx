@@ -12,6 +12,7 @@ import HomeScreen from '../screens/HomeScreen';
 import CatsScreen from '../screens/CatsScreen';
 import RecordsScreen from '../screens/RecordsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ShareScreen from '../screens/ShareScreen';
 
 import { subscribeToAuthState } from '../services/authService';
 import {
@@ -57,17 +58,28 @@ function MainTabs() {
   );
 }
 
+// 현재 URL이 공유 링크 경로(/share/:token)인지 판별. 웹 전용.
+function getShareTokenFromPath(): string | null {
+  if (typeof window === 'undefined') return null;
+  const m = window.location.pathname.match(/^\/share\/([^/?#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 export default function AppNavigator() {
   const {
     user, setUser, setHousehold, setCats, setRecipes,
     setChecks, setLogs, setIsLoading,
   } = useStore();
 
+  // 공유 링크는 메인 앱과 독립적 — auth 구독/데이터 로드 없이 즉시 렌더링.
+  const shareToken = getShareTokenFromPath();
+
   const [authLoaded, setAuthLoaded] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const dataUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    if (shareToken) return; // 공유 뷰에서는 auth/데이터 구독 스킵
     // 3초 후 초기화 버튼 노출, 5초 후 로컬 세션 자동 초기화 후 로그인 화면
     const resetTimer = setTimeout(() => setShowReset(true), 3000);
     const fallback = setTimeout(async () => {
@@ -128,6 +140,20 @@ export default function AppNavigator() {
       }
     };
   }, []);
+
+  if (shareToken) {
+    return (
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen
+            name="ShareLink"
+            component={ShareScreen}
+            initialParams={{ token: shareToken }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    );
+  }
 
   if (!authLoaded) {
     return (
