@@ -465,6 +465,46 @@ export function subscribeToChecks(
   return () => { supabase.removeChannel(channel); };
 }
 
+// ── Share RPC (펫시터용 SECURITY DEFINER 래퍼) ────────────────────────────────
+
+export interface ShareBundle {
+  household: Household;
+  cats: Cat[];
+  recipes: Recipe[];
+}
+
+export async function shareGetData(token: string): Promise<ShareBundle | null> {
+  const { data, error } = await supabase.rpc('share_get_data', { p_token: token });
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    household: toHousehold(data.household),
+    cats: (data.cats ?? []).map(toCat),
+    recipes: (data.recipes ?? []).map(toRecipe),
+  };
+}
+
+export async function shareGetChecks(token: string, date: string): Promise<CheckRecord[]> {
+  const { data, error } = await supabase.rpc('share_get_checks', { p_token: token, p_date: date });
+  if (error) throw error;
+  return (data ?? []).map(toCheckRecord);
+}
+
+export async function shareUpsertCheck(token: string, check: CheckRecord): Promise<void> {
+  if (!throttleWrite(`shareUpsertCheck-${check.id}`, 500)) return;
+  const { error } = await supabase.rpc('share_upsert_check', {
+    p_token: token,
+    p_id: check.id,
+    p_date: check.date,
+    p_recipe_id: check.recipeId,
+    p_cat_id: check.catId,
+    p_done: check.done,
+    p_done_at: check.doneAt ?? null,
+    p_done_by: check.doneBy ?? 'guest',
+  });
+  if (error) throw error;
+}
+
 export async function getChecksForDateRange(
   householdId: string,
   startDate: string,
