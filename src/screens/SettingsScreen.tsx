@@ -28,7 +28,7 @@ function webAlert(title: string, message?: string) {
 
 // 공유 URL을 현재 실행 환경에 맞게 생성.
 // 웹: 현재 origin 사용 (로컬 dev·vercel preview·프로덕션 모두 대응). 네이티브: 프로덕션 도메인.
-const PROD_WEB_ORIGIN = 'https://catcare.app';
+const PROD_WEB_ORIGIN = 'https://catcare-one.vercel.app';
 function buildShareUrl(token: string): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}/share/${token}`;
