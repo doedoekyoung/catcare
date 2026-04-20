@@ -113,7 +113,7 @@ export default function CatDetailScreen() {
               </View>
             )}
             <View style={styles.avatarEditBadge}>
-              <Text style={{ fontSize: 14 }}>📷</Text>
+              <Text style={styles.avatarEditText}>변경</Text>
             </View>
           </TouchableOpacity>
           <Text style={styles.profileName}>{cat.name}</Text>
@@ -142,7 +142,7 @@ export default function CatDetailScreen() {
 
         {/* 30-day completion chart (REQ-V5-03) */}
         <Card style={{ marginBottom: spacing.lg }}>
-          <Text style={styles.chartTitle}>📊 30일 완료율</Text>
+          <Text style={styles.chartTitle}>30일 완료율</Text>
           <View style={styles.heatmapWrap}>
             {monthlyStats.map(({ date, pct }) => {
               const opacity = pct === 0 ? 0.1 : pct < 50 ? 0.4 : pct < 80 ? 0.7 : 1;
@@ -166,7 +166,7 @@ export default function CatDetailScreen() {
         </Card>
 
         {/* Active recipes summary */}
-        <Text style={styles.sectionTitle}>📋 루틴 현황</Text>
+        <Text style={styles.sectionTitle}>루틴 현황</Text>
         {catRecipes.length === 0 ? (
           <Card style={{ backgroundColor: colors.cream }}>
             <Text style={{ fontSize: 13, color: colors.muted, textAlign: 'center' }}>
@@ -178,7 +178,6 @@ export default function CatDetailScreen() {
             const isDoneToday = !!checks[`${today}_${r.id}_${cat.id}`]?.done;
             return (
               <View key={r.id} style={[styles.recipeRow, shadow.sm]}>
-                <Text style={{ fontSize: 20 }}>{r.time === 'am' ? '☀️' : r.time === 'pm' ? '🌙' : '📅'}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.recipeName, !r.active && { textDecorationLine: 'line-through', color: colors.muted }]}>
                     {r.name}
@@ -224,10 +223,11 @@ const styles = StyleSheet.create({
   },
   avatarEditBadge: {
     position: 'absolute', bottom: 0, right: 0,
-    width: 30, height: 30, borderRadius: 15,
+    paddingHorizontal: 8, height: 22, borderRadius: 11,
     backgroundColor: colors.caramel, alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: '#fff',
   },
+  avatarEditText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   profileName: { fontSize: 22, fontWeight: '700', color: colors.charcoal, marginBottom: 4 },
   profileMeta: { fontSize: 13, color: colors.muted, marginBottom: 2 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: spacing.lg },

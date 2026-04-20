@@ -9,6 +9,8 @@ import { signUpWithEmail, signInWithEmail } from '../services/authService';
 import { createHousehold } from '../services/dbService';
 import { useStore } from '../store/useStore';
 import { Button, Input } from '../components/ui';
+import Logo from '../components/Logo';
+import InAppBrowserBanner from '../components/InAppBrowserBanner';
 import { colors, spacing, radius } from '../utils/theme';
 
 export default function AuthScreen() {
@@ -62,14 +64,14 @@ export default function AuthScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <InAppBrowserBanner />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.kav}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.logoWrap}>
-            <Text style={styles.logo}>🐱 CatCare</Text>
-            <Text style={styles.logoSub}>고양이 돌봄 루틴 관리</Text>
+            <Logo height={64} withTagline />
           </View>
 
           <View style={styles.tabs}>
@@ -148,8 +150,6 @@ const styles = StyleSheet.create({
   kav: { flex: 1 },
   content: { padding: spacing.xl, justifyContent: 'center', minHeight: '100%' as any },
   logoWrap: { alignItems: 'center', marginBottom: spacing.xl },
-  logo: { fontSize: 36, fontWeight: '800', color: colors.caramel },
-  logoSub: { fontSize: 14, color: colors.muted, marginTop: 6 },
   tabs: {
     flexDirection: 'row', marginBottom: spacing.lg,
     borderRadius: radius.md, overflow: 'hidden', borderWidth: 1.5, borderColor: colors.border,

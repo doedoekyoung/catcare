@@ -48,16 +48,10 @@ const GENDER_OPTIONS = [
 ];
 
 const TIME_OPTIONS: { value: TimeSlot; label: string }[] = [
-  { value: 'morning', label: '🌅 아침' },
-  { value: 'lunch', label: '☀️ 점심' },
-  { value: 'evening', label: '🌙 저녁' },
+  { value: 'morning', label: '아침' },
+  { value: 'lunch', label: '점심' },
+  { value: 'evening', label: '저녁' },
 ];
-
-const TIME_ICONS: Record<TimeSlot, string> = {
-  morning: '🌅',
-  lunch: '☀️',
-  evening: '🌙',
-};
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -452,11 +446,17 @@ export default function CatsScreen() {
     );
   };
 
+  // 개별 요일 토글 — "매일" 상태(length===0)에서 개별 요일을 누르면 해당 요일만 선택된 상태로 전환
   const toggleRecipeDay = (d: number) => {
-    setRecipeDays((prev) =>
-      prev.includes(d) ? prev.filter((v) => v !== d) : [...prev, d]
-    );
+    setRecipeDays((prev) => {
+      if (prev.length === 0) return [d];
+      const next = prev.includes(d) ? prev.filter((v) => v !== d) : [...prev, d];
+      // 7개 모두 선택되면 "매일"(빈 배열)로 정규화
+      return next.length === 7 ? [] : next;
+    });
   };
+
+  const setEveryDay = () => setRecipeDays([]);
 
   const toggleSharedCat = (catId: string) => {
     setRecipeSharedCatIds((prev) =>
@@ -478,7 +478,6 @@ export default function CatsScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {cats.length === 0 && (
           <EmptyState
-            emoji="🐱"
             title="등록된 고양이가 없어요"
             desc="상단 버튼으로 첫 고양이를 등록해보세요"
             action={{ label: '+ 고양이 등록', onPress: openAddCat }}
@@ -576,7 +575,6 @@ export default function CatsScreen() {
                 <Image source={{ uri: catPhotoUri }} style={styles.photoPreview} />
               ) : (
                 <View style={[styles.photoPlaceholder, { backgroundColor: catTagColor + '30' }]}>
-                  <Text style={{ fontSize: 32 }}>📷</Text>
                   <Text style={[styles.photoHint, { color: catTagColor }]}>사진 선택</Text>
                 </View>
               )}
@@ -725,17 +723,38 @@ export default function CatsScreen() {
           <Text style={styles.fieldLabel}>반복 요일</Text>
           <Text style={styles.dayResultText}>{daysLabel(recipeDays)}</Text>
         </View>
+        <TouchableOpacity
+          testID="recipe-form-everyday"
+          style={[styles.everyDayBtn, recipeDays.length === 0 && styles.everyDayBtnSel]}
+          onPress={setEveryDay}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.everyDayText, recipeDays.length === 0 && styles.everyDayTextSel]}>
+            매일
+          </Text>
+        </TouchableOpacity>
         <View style={styles.dayRow}>
           {DAY_NAMES.map((name, idx) => {
-            const sel = recipeDays.length === 0 || recipeDays.includes(idx);
-            const isActive = recipeDays.includes(idx);
+            const isEveryDay = recipeDays.length === 0;
+            const isPicked = recipeDays.includes(idx);
             return (
               <TouchableOpacity
                 key={idx}
-                style={[styles.dayBtn, isActive && styles.dayBtnSel]}
+                style={[
+                  styles.dayBtn,
+                  isEveryDay && styles.dayBtnAllOn,
+                  !isEveryDay && isPicked && styles.dayBtnSel,
+                ]}
                 onPress={() => toggleRecipeDay(idx)}
+                activeOpacity={0.75}
               >
-                <Text style={[styles.dayBtnText, isActive && styles.dayBtnTextSel]}>
+                <Text
+                  style={[
+                    styles.dayBtnText,
+                    isEveryDay && styles.dayBtnTextAllOn,
+                    !isEveryDay && isPicked && styles.dayBtnTextSel,
+                  ]}
+                >
                   {name}
                 </Text>
               </TouchableOpacity>
@@ -929,6 +948,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
+  everyDayBtn: {
+    paddingVertical: 10, paddingHorizontal: 14, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.cream,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 10,
+  },
+  everyDayBtnSel: {
+    backgroundColor: colors.caramel,
+    borderColor: colors.caramel,
+  },
+  everyDayText: {
+    fontSize: 14, fontWeight: '600', color: colors.brownMid,
+  },
+  everyDayTextSel: {
+    color: '#fff',
+  },
   dayBtn: {
     width: 38, height: 38, borderRadius: 19,
     alignItems: 'center', justifyContent: 'center',
@@ -939,11 +975,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.caramel,
     borderColor: colors.caramel,
   },
+  dayBtnAllOn: {
+    backgroundColor: colors.caramel + '22',
+    borderColor: colors.caramel + '55',
+  },
   dayBtnText: {
     fontSize: 13, fontWeight: '600', color: colors.muted,
   },
   dayBtnTextSel: {
     color: '#fff',
+  },
+  dayBtnTextAllOn: {
+    color: colors.caramel,
   },
 
   recipeCardInactive: { opacity: 0.55 },

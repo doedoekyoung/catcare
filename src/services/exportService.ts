@@ -162,10 +162,10 @@ function buildReportHTML(opts: ExportOptions): string {
   @media print { body { padding: 0; } }
 </style>
 </head><body>
-<h1>🐱 CatCare 건강 리포트</h1>
+<h1>CatCare 건강 리포트</h1>
 <p>${dateRange}</p>
 ${catSections}
-<h2>📓 데일리 로그</h2>
+<h2>데일리 로그</h2>
 ${logSection || '<p style="color:#8C7B70">기록된 로그가 없습니다.</p>'}
 </body></html>`;
 }

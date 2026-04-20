@@ -404,7 +404,7 @@ export default function SettingsScreen() {
         )}
 
         {/* Account */}
-        {settingSection('🔐 계정', <>
+        {settingSection('계정', <>
           {settingRow('', '로그아웃', undefined, handleSignOut)}
         </>)}
 

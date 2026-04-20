@@ -14,6 +14,7 @@ import {
   Pressable,
   Platform,
   Dimensions,
+  KeyboardAvoidingView,
   type TextInputProps,
   type ViewStyle,
   type TextStyle,
@@ -184,6 +185,7 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
             showsVerticalScrollIndicator={false}
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: bottomPad }}
+            keyboardShouldPersistTaps="handled"
           >
             {children}
           </ScrollView>
@@ -193,28 +195,34 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
     );
   }
 
-  // 네이티브 (Modal)
+  // 네이티브 (Modal) — KeyboardAvoidingView로 키보드가 입력 필드를 가리지 않도록 처리
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={[styles.sheet, { maxHeight: maxSheetHeight }]} onPress={() => {}}>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={onClose}
-            style={{ padding: 8, alignItems: 'center' }}
-          >
-            <View style={styles.sheetHandle} />
-          </TouchableOpacity>
-          {title && <Text style={styles.sheetTitle}>{title}</Text>}
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: bottomPad }}
-          >
-            {children}
-          </ScrollView>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.overlay}
+      >
+        <Pressable style={styles.overlayInner} onPress={onClose}>
+          <Pressable style={[styles.sheet, { maxHeight: maxSheetHeight }]} onPress={() => {}}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onClose}
+              style={{ padding: 8, alignItems: 'center' }}
+            >
+              <View style={styles.sheetHandle} />
+            </TouchableOpacity>
+            {title && <Text style={styles.sheetTitle}>{title}</Text>}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: bottomPad }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {children}
+            </ScrollView>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -249,12 +257,12 @@ export function ProgressBar({ pct }: { pct: number }) {
 export function EmptyState({
   emoji, title, desc, action
 }: {
-  emoji: string; title: string; desc?: string;
+  emoji?: string; title: string; desc?: string;
   action?: { label: string; onPress: () => void };
 }) {
   return (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyEmoji}>{emoji}</Text>
+      {emoji ? <Text style={styles.emptyEmoji}>{emoji}</Text> : null}
       <Text style={styles.emptyTitle}>{title}</Text>
       {desc && <Text style={styles.emptyDesc}>{desc}</Text>}
       {action && (
@@ -313,7 +321,8 @@ const styles = StyleSheet.create({
   sectionLine: { flex: 1, height: 1, backgroundColor: colors.border },
 
   // Sheet
-  overlay: { flex: 1, backgroundColor: 'rgba(44,36,32,0.4)', justifyContent: 'flex-end' },
+  overlay: { flex: 1 },
+  overlayInner: { flex: 1, backgroundColor: 'rgba(44,36,32,0.4)', justifyContent: 'flex-end' },
   overlayFixed: {
     position: 'fixed' as any,
     top: 0, left: 0, right: 0, bottom: 0,

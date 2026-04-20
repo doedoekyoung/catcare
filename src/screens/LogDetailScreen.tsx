@@ -160,7 +160,7 @@ export default function LogDetailScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{formatFullDate(date)}</Text>
         <TouchableOpacity style={styles.addLogBtn} onPress={() => openLogModal()}>
-          <Text style={{ fontSize: 18 }}>✏️</Text>
+          <Text style={styles.addLogBtnText}>메모</Text>
         </TouchableOpacity>
       </View>
 
@@ -183,7 +183,7 @@ export default function LogDetailScreen() {
         </View>
 
         {/* Unified Timeline (REQ-V4-05) */}
-        <Text style={styles.sectionTitle}>⏱ 타임라인</Text>
+        <Text style={styles.sectionTitle}>타임라인</Text>
         {timeline.length === 0 ? (
           <Card style={{ backgroundColor: colors.cream }}>
             <Text style={{ fontSize: 13, color: colors.muted, textAlign: 'center' }}>
@@ -222,13 +222,12 @@ export default function LogDetailScreen() {
         {/* Unchecked items */}
         {dayChecks.filter((c) => !c.done).length > 0 && (
           <>
-            <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>⚠️ 미완료 항목</Text>
+            <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>미완료 항목</Text>
             {dayChecks.filter((c) => !c.done).map((c) => {
               const recipe = recipes.find((r) => r.id === c.recipeId);
               const cat = cats.find((cat) => cat.id === c.catId);
               return (
                 <View key={c.id} style={[styles.missedRow, shadow.sm]}>
-                  <Text style={{ fontSize: 18 }}>⬜</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.missedName}>{recipe?.name ?? '-'}</Text>
                     <Text style={styles.missedCat}>{cat?.emoji} {cat?.name}</Text>
@@ -248,7 +247,7 @@ export default function LogDetailScreen() {
       <BottomSheet
         visible={memoModal}
         onClose={() => setMemoModal(false)}
-        title="📝 항목 메모"
+        title="항목 메모"
       >
         <Input
           label="메모"
@@ -269,7 +268,7 @@ export default function LogDetailScreen() {
       <BottomSheet
         visible={logModal}
         onClose={() => setLogModal(false)}
-        title="✏️ 로그 작성"
+        title="로그 작성"
       >
         <Input
           label="특이사항"
@@ -296,14 +295,13 @@ function CheckTimelineItem({ check, recipe, cat, onMemo }: any) {
   return (
     <View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <Text style={{ fontSize: 16 }}>✅</Text>
         <Text style={{ fontSize: 14, color: colors.charcoal, flex: 1 }}>
           {recipe?.name ?? '알 수 없는 항목'}
         </Text>
         {recipe && <Tag label={recipe.time === 'am' ? '오전' : recipe.time === 'pm' ? '오후' : '종일'} type={recipe.time} />}
       </View>
       {cat && (
-        <Text style={{ fontSize: 12, color: colors.muted }}>{cat.emoji} {cat.name}</Text>
+        <Text style={{ fontSize: 12, color: colors.muted }}>{cat.name}</Text>
       )}
       {check.memo ? (
         <View style={{ marginTop: 8, backgroundColor: colors.cream, borderRadius: 8, padding: 8 }}>
@@ -312,7 +310,7 @@ function CheckTimelineItem({ check, recipe, cat, onMemo }: any) {
       ) : null}
       <TouchableOpacity onPress={onMemo} style={{ marginTop: 8 }}>
         <Text style={{ fontSize: 12, color: colors.caramel }}>
-          {check.memo ? '✏️ 메모 수정' : '+ 메모 추가'}
+          {check.memo ? '메모 수정' : '+ 메모 추가'}
         </Text>
       </TouchableOpacity>
     </View>
@@ -323,7 +321,6 @@ function LogTimelineItem({ log, onEdit, onDelete, onPhoto, photoLoading }: any) 
   return (
     <View>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-        <Text style={{ fontSize: 16 }}>📓</Text>
         <Text style={{ fontSize: 14, color: colors.charcoal, flex: 1, lineHeight: 22 }}>
           {log.text}
         </Text>
@@ -335,17 +332,17 @@ function LogTimelineItem({ log, onEdit, onDelete, onPhoto, photoLoading }: any) 
           resizeMode="cover"
         />
       )}
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+      <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
         <TouchableOpacity onPress={onEdit}>
-          <Text style={{ fontSize: 12, color: colors.caramel }}>✏️ 수정</Text>
+          <Text style={{ fontSize: 12, color: colors.caramel }}>수정</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onPhoto}>
           <Text style={{ fontSize: 12, color: colors.caramel }}>
-            {photoLoading ? '⏳ 업로드 중...' : log.photoUri ? '📷 사진 변경' : '📷 사진 추가'}
+            {photoLoading ? '업로드 중' : log.photoUri ? '사진 변경' : '사진 추가'}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onDelete}>
-          <Text style={{ fontSize: 12, color: colors.terracotta }}>🗑️ 삭제</Text>
+          <Text style={{ fontSize: 12, color: colors.terracotta }}>삭제</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -362,9 +359,10 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '700', color: colors.charcoal, flex: 1, textAlign: 'center' },
   addLogBtn: {
-    width: 40, height: 40, borderRadius: radius.md,
+    paddingHorizontal: 12, height: 36, borderRadius: radius.md,
     backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
   },
+  addLogBtnText: { fontSize: 13, fontWeight: '600', color: colors.brownMid },
   content: { padding: spacing.lg, paddingBottom: 60 },
   summaryRow: { flexDirection: 'row', gap: 10, marginBottom: spacing.lg },
   summaryItem: {

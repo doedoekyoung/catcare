@@ -436,7 +436,6 @@ export default function RecordsScreen() {
 
           {logs.length === 0 && (
             <EmptyState
-              emoji="📅"
               title="아직 포스트가 없어요"
               desc="홈 화면에서 오늘의 메모를 작성하면 여기에 표시돼요"
             />

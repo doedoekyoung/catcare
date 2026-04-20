@@ -7,6 +7,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { Text, View, TouchableOpacity } from 'react-native';
 import { clearLocalSession } from '../services/authService';
 
+import Logo from '../components/Logo';
 import AuthScreen from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
 import CatsScreen from '../screens/CatsScreen';
@@ -158,8 +159,8 @@ export default function AppNavigator() {
   if (!authLoaded) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream }}>
-        <Text style={{ fontSize: 36 }}>🐱</Text>
-        <Text style={{ color: colors.muted, marginTop: 12 }}>로딩 중...</Text>
+        <Logo height={56} />
+        <Text style={{ color: colors.muted, marginTop: 16 }}>로딩 중...</Text>
         {showReset && (
           <TouchableOpacity
             style={{

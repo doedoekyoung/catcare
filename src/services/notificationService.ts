@@ -28,7 +28,7 @@ export async function scheduleIncompleteReminder(
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '🐱 오늘 루틴 확인',
+      title: '오늘 루틴 확인',
       body: '아직 완료하지 않은 돌봄 항목이 있어요!',
       sound: true,
     },

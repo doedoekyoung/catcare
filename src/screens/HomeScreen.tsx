@@ -21,9 +21,9 @@ const TAG_OPTIONS = [
 ];
 
 const TIME_LABELS: Record<TimeSlot, string> = {
-  morning: '🌅 아침',
-  lunch: '☀️ 점심',
-  evening: '🌙 저녁',
+  morning: '아침',
+  lunch: '점심',
+  evening: '저녁',
 };
 
 const TIME_SLOTS: TimeSlot[] = ['morning', 'lunch', 'evening'];
@@ -77,7 +77,13 @@ export default function HomeScreen() {
   const today = toDateKey();
   const activeRecipes = selectActiveRecipesForCats(recipes, selectedCatIds, today);
   const { done, total, pct } = selectCompletionRate(recipes, checks, today, selectedCatIds);
-  const todayLogs = logs.filter((l) => l.date === today);
+  // 전체 탭(activeCatId === null)에서는 모든 메모를 보여주고,
+  // 개별 고양이 탭에서는 해당 고양이의 메모만 노출한다.
+  const todayLogs = logs.filter((l) => {
+    if (l.date !== today) return false;
+    if (activeCatId === null) return true;
+    return l.catId === activeCatId;
+  });
   const canAddLog = todayLogs.length < 5;
 
   // 시간대별 그룹 — 복수 시간대 지원
@@ -144,7 +150,7 @@ export default function HomeScreen() {
       setEditingLogId(null);
       setLogText('');
       setLogTagColor(null);
-      setLogCatId(null);
+      setLogCatId(activeCatId);
     }
     setLogModalVisible(true);
   };
@@ -159,9 +165,6 @@ export default function HomeScreen() {
               <Text style={styles.doneBadgeText}>{done} / {total}</Text>
             </View>
           )}
-          <TouchableOpacity testID="home-log-button" style={[styles.logBtn, !canAddLog && { opacity: 0.4 }]} onPress={() => canAddLog && openLogModal()} disabled={!canAddLog}>
-            <Text style={{ fontSize: 16 }}>✏</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -222,7 +225,6 @@ export default function HomeScreen() {
 
         {cats.length === 0 && (
           <EmptyState
-            emoji="🐱"
             title="고양이를 등록해보세요"
             desc="하단 고양이 탭에서 첫 고양이를 등록하고 루틴을 만들어보세요"
           />
@@ -314,7 +316,7 @@ export default function HomeScreen() {
                   );
                 })}
                 {canAddLog && (
-                  <Button label="+ 메모 추가" variant="secondary" size="sm" onPress={() => openLogModal()} style={{ marginTop: 4 }} />
+                  <Button testID="home-log-button" label="+ 메모 추가" variant="secondary" size="sm" onPress={() => openLogModal()} style={{ marginTop: 4 }} />
                 )}
               </>
             ) : (
@@ -322,7 +324,7 @@ export default function HomeScreen() {
                 <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 10, textAlign: 'center' }}>
                   오늘의 특이사항을 기록해보세요
                 </Text>
-                <Button label="메모 추가" variant="secondary" size="sm" onPress={() => openLogModal()} />
+                <Button testID="home-log-button" label="+ 메모 추가" variant="secondary" size="sm" onPress={() => openLogModal()} />
               </Card>
             )}
           </>
@@ -412,10 +414,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.full, backgroundColor: colors.caramel,
   },
   doneBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  logBtn: {
-    width: 36, height: 36, borderRadius: radius.md,
-    backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
-  },
   catTabScroll: { borderBottomWidth: 1, borderBottomColor: colors.border, flexShrink: 0, flexGrow: 0 },
   catTabBar: { flexDirection: 'row', paddingHorizontal: 16 },
   catTab: {
