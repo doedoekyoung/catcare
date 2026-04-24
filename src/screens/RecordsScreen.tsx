@@ -10,8 +10,10 @@ import { useStore } from '../store/useStore';
 import { BottomSheet, Button, Input, EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { toDateKey, getLast30Days } from '../utils/date';
-import { getLogsForDateRange, upsertLog } from '../services/dbService';
-import type { DailyLog } from '../types';
+import { getLogsForDateRange, upsertLog, getChecksForDateRange } from '../services/dbService';
+import type { DailyLog, CheckRecord, TimeSlot } from '../types';
+
+type MissItem = { recipeId: string; recipeName: string; catId: string; timeSlot: TimeSlot };
 
 const TAG_OPTIONS = [
   { value: '#EF4444', label: '응급' },
@@ -21,6 +23,8 @@ const TAG_OPTIONS = [
 ];
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MONTHS_KR = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+const TIME_LABEL_KR: Record<TimeSlot, string> = { morning: '아침', lunch: '점심', evening: '저녁' };
+const TIME_ORDER: Record<TimeSlot, number> = { morning: 0, lunch: 1, evening: 2 };
 
 function formatDateHeader(dateStr: string, today: string): string {
   const d = new Date(dateStr + 'T00:00:00');
@@ -66,7 +70,7 @@ function toCalKey(year: number, month: number, day: number): string {
 }
 
 export default function RecordsScreen() {
-  const { cats, logs, household, user, setLogs } = useStore();
+  const { cats, recipes, logs, household, user, setLogs } = useStore();
 
   const today = toDateKey();
   const [activeTab, setActiveTab] = useState<'write' | 'calendar'>('write');
@@ -79,6 +83,13 @@ export default function RecordsScreen() {
     if (!household?.id) return;
     const days = getLast30Days();
     getLogsForDateRange(household.id, days[0], today).then(setHistoryLogs).catch(() => {});
+  }, [household?.id, today]);
+
+  const [historyChecks, setHistoryChecks] = useState<CheckRecord[]>([]);
+  useEffect(() => {
+    if (!household?.id) return;
+    const days = getLast30Days();
+    getChecksForDateRange(household.id, days[0], today).then(setHistoryChecks).catch(() => {});
   }, [household?.id, today]);
 
   const allLogs = useMemo(() => {
@@ -177,9 +188,64 @@ export default function RecordsScreen() {
   const [selectedCalDate, setSelectedCalDate] = useState<string | null>(null);
   const logsByDate = useMemo(() => {
     const map: Record<string, DailyLog[]> = {};
-    allLogs.forEach((l) => { if (!map[l.date]) map[l.date] = []; map[l.date].push(l); });
+    const filtered = activeCatFilter ? allLogs.filter((l) => l.catId === activeCatFilter) : allLogs;
+    filtered.forEach((l) => { if (!map[l.date]) map[l.date] = []; map[l.date].push(l); });
     return map;
-  }, [allLogs]);
+  }, [allLogs, activeCatFilter]);
+
+  const missByDate = useMemo(() => {
+    const result: Record<string, MissItem[]> = {};
+    if (!recipes.length) return result;
+    const doneKeys = new Set(historyChecks.filter((c) => c.done).map((c) => c.id));
+    const days = getLast30Days();
+    days.forEach((date) => {
+      if (date >= today) return;
+      const dow = new Date(date + 'T00:00:00').getDay();
+      recipes.forEach((r) => {
+        if (!r.active) return;
+        if (date < r.createdAt.slice(0, 10)) return;
+        const scheduled = (r.days ?? []).length === 0 || (r.days ?? []).includes(dow);
+        if (!scheduled) return;
+        r.times.forEach((ts) => {
+          r.catIds.forEach((catId) => {
+            if (activeCatFilter && activeCatFilter !== catId) return;
+            const key = `${date}_${r.id}_${catId}_${ts}`;
+            if (doneKeys.has(key)) return;
+            if (!result[date]) result[date] = [];
+            result[date].push({ recipeId: r.id, recipeName: r.name, catId, timeSlot: ts });
+          });
+        });
+      });
+    });
+    Object.keys(result).forEach((d) => {
+      result[d].sort((a, b) => TIME_ORDER[a.timeSlot] - TIME_ORDER[b.timeSlot]);
+    });
+    return result;
+  }, [recipes, historyChecks, activeCatFilter, today]);
+
+  const selectedMisses = selectedCalDate ? (missByDate[selectedCalDate] ?? []) : [];
+  const selectedMissesByCat = useMemo(() => {
+    const groups: Record<string, MissItem[]> = {};
+    selectedMisses.forEach((m) => {
+      if (!groups[m.catId]) groups[m.catId] = [];
+      groups[m.catId].push(m);
+    });
+    return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+  }, [selectedMisses]);
+
+  const [toggledMissCats, setToggledMissCats] = useState<Set<string>>(new Set());
+  useEffect(() => { setToggledMissCats(new Set()); }, [selectedCalDate, activeCatFilter]);
+  const toggleMissCat = (catId: string) => {
+    setToggledMissCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(catId)) next.delete(catId); else next.add(catId);
+      return next;
+    });
+  };
+  const isMissCatOpen = (catId: string, idx: number) => {
+    const toggled = toggledMissCats.has(catId);
+    return idx === 0 ? !toggled : toggled;
+  };
   const calendarCells = useMemo(() => {
     const daysInMonth = getDaysInMonth(calYear, calMonth);
     const firstDay = getFirstDayOfWeek(calYear, calMonth);
@@ -231,6 +297,37 @@ export default function RecordsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Cat filter chips — 쓰기/달력 공통 */}
+      {cats.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipBarScroll}
+        >
+          <View style={styles.chipBarContent}>
+            <TouchableOpacity
+              testID="records-chip-all"
+              style={[styles.chip, activeCatFilter === null && styles.chipActive]}
+              onPress={() => setActiveCatFilter(null)}
+            >
+              <Text style={[styles.chipText, activeCatFilter === null && styles.chipTextActive]}>전체</Text>
+            </TouchableOpacity>
+            {cats.map((c) => (
+              <TouchableOpacity
+                key={c.id}
+                testID={`records-chip-${c.id}`}
+                style={[styles.chip, activeCatFilter === c.id && styles.chipActive]}
+                onPress={() => setActiveCatFilter(c.id)}
+              >
+                <Text style={[styles.chipText, activeCatFilter === c.id && styles.chipTextActive]}>
+                  {c.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      )}
+
       {activeTab === 'write' ? (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {cats.length === 0 ? (
@@ -255,31 +352,6 @@ export default function RecordsScreen() {
                   <Text style={styles.dateArrowText}>›</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Cat chips */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md, flexGrow: 0 }}>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TouchableOpacity
-                    testID="records-chip-all"
-                    style={[styles.chip, activeCatFilter === null && styles.chipActive]}
-                    onPress={() => setActiveCatFilter(null)}
-                  >
-                    <Text style={[styles.chipText, activeCatFilter === null && styles.chipTextActive]}>전체</Text>
-                  </TouchableOpacity>
-                  {cats.map((c) => (
-                    <TouchableOpacity
-                      key={c.id}
-                      testID={`records-chip-${c.id}`}
-                      style={[styles.chip, activeCatFilter === c.id && styles.chipActive]}
-                      onPress={() => setActiveCatFilter(c.id)}
-                    >
-                      <Text style={[styles.chipText, activeCatFilter === c.id && styles.chipTextActive]}>
-                        {c.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
 
               {/* 전체 모드 요약 카드 */}
               {activeCatFilter === null && (
@@ -411,16 +483,22 @@ export default function RecordsScreen() {
 
           {/* Legend */}
           <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={styles.legendMissBadge}>
+                <Text style={styles.legendMissText}>N</Text>
+              </View>
+              <Text style={styles.legendText}>미완료</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: colors.caramel }]} />
+              <Text style={styles.legendText}>메모</Text>
+            </View>
             {TAG_OPTIONS.map((t) => (
               <View key={t.value} style={styles.legendItem}>
                 <View style={[styles.legendDot, { backgroundColor: t.value }]} />
                 <Text style={styles.legendText}>{t.label}</Text>
               </View>
             ))}
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.caramel }]} />
-              <Text style={styles.legendText}>메모</Text>
-            </View>
           </View>
 
           {/* Calendar grid */}
@@ -438,6 +516,7 @@ export default function RecordsScreen() {
               }
               const dateKey = toCalKey(calYear, calMonth, day);
               const dateLogs = logsByDate[dateKey] ?? [];
+              const missCount = (missByDate[dateKey] ?? []).length;
               const isToday = dateKey === today;
               const isSelected = dateKey === selectedCalDate;
               const dayOfWeek = (getFirstDayOfWeek(calYear, calMonth) + day - 1) % 7;
@@ -468,6 +547,11 @@ export default function RecordsScreen() {
                       ))}
                     </View>
                   )}
+                  {missCount > 0 && (
+                    <View style={[styles.missBadge, missCount >= 10 && styles.missBadgeWide]}>
+                      <Text style={styles.missBadgeText}>{missCount >= 10 ? '9+' : missCount}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -479,6 +563,69 @@ export default function RecordsScreen() {
               <View style={styles.selectedLogHeader}>
                 <Text style={styles.selectedLogDate}>{formatDisplayDateCal(selectedCalDate)}</Text>
               </View>
+
+              {selectedMisses.length > 0 && (
+                <View style={styles.missBlock}>
+                  <View style={styles.missBlockHead}>
+                    <Text style={styles.missBlockTitle}>
+                      {activeCatFilter
+                        ? `✗ ${cats.find((c) => c.id === activeCatFilter)?.name ?? ''}의 미완료 루틴 ${selectedMisses.length}건`
+                        : `✗ 미완료 루틴 ${selectedMisses.length}건`}
+                    </Text>
+                    {!activeCatFilter && selectedMissesByCat.length > 0 && (
+                      <Text style={styles.missBlockSub}>{selectedMissesByCat.length}마리</Text>
+                    )}
+                  </View>
+                  {activeCatFilter ? (
+                    selectedMisses.map((m, i) => (
+                      <View
+                        key={`${m.recipeId}_${m.catId}_${m.timeSlot}`}
+                        style={[styles.missFlatItem, i > 0 && styles.missFlatItemBorder]}
+                      >
+                        <View style={styles.missSlot}>
+                          <Text style={styles.missSlotText}>{TIME_LABEL_KR[m.timeSlot]}</Text>
+                        </View>
+                        <Text style={styles.missFlatName}>{m.recipeName}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    selectedMissesByCat.map(([catId, items], idx) => {
+                      const cat = cats.find((c) => c.id === catId);
+                      const tagColor = cat?.tagColor ?? colors.caramel;
+                      const open = isMissCatOpen(catId, idx);
+                      return (
+                        <View key={catId} style={styles.missCatGroup}>
+                          <TouchableOpacity
+                            style={styles.missCatHead}
+                            onPress={() => toggleMissCat(catId)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={[styles.missCatDot, { backgroundColor: tagColor }]} />
+                            <Text style={styles.missCatName}>{cat?.name ?? '—'}</Text>
+                            <View style={styles.missCountPill}>
+                              <Text style={styles.missCountText}>{items.length}</Text>
+                            </View>
+                            <Text style={styles.missChev}>{open ? '▲' : '▼'}</Text>
+                          </TouchableOpacity>
+                          {open && (
+                            <View style={styles.missCatBody}>
+                              {items.map((m) => (
+                                <View key={`${m.recipeId}_${m.timeSlot}`} style={styles.missCatItem}>
+                                  <View style={styles.missSlot}>
+                                    <Text style={styles.missSlotText}>{TIME_LABEL_KR[m.timeSlot]}</Text>
+                                  </View>
+                                  <Text style={styles.missCatItemName}>{m.recipeName}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+              )}
+
               {selectedLogs.length > 0 ? (
                 selectedLogs.map((log) => {
                   const tagOption = log.tagColor ? TAG_OPTIONS.find((t) => t.value === log.tagColor) : null;
@@ -639,6 +786,14 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.caramel, borderColor: colors.caramel },
   chipText: { fontSize: 13, color: colors.brownMid },
   chipTextActive: { color: '#fff', fontWeight: '600' },
+  chipBarScroll: {
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexShrink: 0, flexGrow: 0, backgroundColor: colors.warmWhite,
+  },
+  chipBarContent: {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: spacing.lg, paddingVertical: 10,
+  },
   summaryCard: {
     backgroundColor: '#fff', borderWidth: 1.5, borderColor: colors.border,
     borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md,
@@ -721,6 +876,69 @@ const styles = StyleSheet.create({
   calDayNum: { fontSize: 13, color: colors.charcoal },
   calDayNumToday: { fontWeight: '800', color: colors.caramel },
   calDot: { width: 6, height: 6, borderRadius: 3, marginTop: 2 },
+  missBadge: {
+    position: 'absolute', top: 3, right: 3,
+    minWidth: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5, borderColor: '#fff',
+  },
+  missBadgeWide: { minWidth: 20, paddingHorizontal: 3 },
+  missBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff', lineHeight: 10 },
+  legendMissBadge: {
+    backgroundColor: '#EF4444', borderRadius: 8,
+    paddingHorizontal: 5, paddingVertical: 1,
+  },
+  legendMissText: { color: '#fff', fontSize: 9, fontWeight: '700', lineHeight: 10 },
+  missBlock: {
+    backgroundColor: 'rgba(239,68,68,0.06)',
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)',
+    borderRadius: radius.md, padding: 12, marginBottom: spacing.md,
+  },
+  missBlockHead: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  missBlockTitle: { fontSize: 13, color: '#EF4444', fontWeight: '700', flex: 1 },
+  missBlockSub: { fontSize: 11, color: colors.muted },
+  missFlatItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 6,
+  },
+  missFlatItemBorder: {
+    borderTopWidth: 1, borderTopColor: 'rgba(239,68,68,0.15)',
+  },
+  missFlatName: { fontSize: 13, color: colors.charcoal, flex: 1 },
+  missCatGroup: {
+    backgroundColor: '#fff',
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)',
+    borderRadius: 10, marginBottom: 8, overflow: 'hidden',
+  },
+  missCatHead: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 10, backgroundColor: 'rgba(239,68,68,0.04)',
+  },
+  missCatDot: { width: 10, height: 10, borderRadius: 5 },
+  missCatName: { fontSize: 13, fontWeight: '700', color: colors.charcoal, flex: 1 },
+  missCountPill: {
+    backgroundColor: '#EF4444', borderRadius: 10,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  missCountText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  missChev: { fontSize: 10, color: colors.muted, width: 16, textAlign: 'center', marginLeft: 4 },
+  missCatBody: { padding: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  missCatItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 4,
+  },
+  missCatItemName: { fontSize: 12, color: colors.charcoal, flex: 1 },
+  missSlot: {
+    backgroundColor: 'rgba(239,68,68,0.12)', borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+    minWidth: 36, alignItems: 'center',
+  },
+  missSlotText: { fontSize: 10, fontWeight: '700', color: '#EF4444' },
   selectedLogCard: {
     backgroundColor: '#fff', borderRadius: radius.md, borderWidth: 1.5,
     borderColor: colors.border, padding: spacing.md, marginBottom: spacing.lg,
