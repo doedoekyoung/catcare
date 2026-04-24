@@ -350,7 +350,6 @@ export default function RecordsScreen() {
                           variant="secondary"
                           size="sm"
                           onPress={() => openAddLog(cat.id)}
-                          style={{ marginTop: catLogs.length === 0 ? 0 : 8 }}
                         />
                       </View>
                     )}
@@ -658,12 +657,12 @@ const styles = StyleSheet.create({
   chev: { fontSize: 14, color: colors.muted, transform: [{ rotate: '0deg' }] },
   chevOpen: { color: colors.brownMid, transform: [{ rotate: '180deg' }] },
   catCardBody: {
-    paddingHorizontal: 16, paddingBottom: 14,
+    paddingHorizontal: 16, paddingVertical: 14, gap: 10,
     borderTopWidth: 1, borderTopColor: colors.border,
   },
   memoItem: {
     backgroundColor: colors.cream, borderRadius: radius.sm,
-    padding: 10, marginTop: 10,
+    padding: 10,
   },
   memoMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   memoTime: { fontSize: 11, color: colors.muted },
