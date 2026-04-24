@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
   },
   completionDot: { width: 6, height: 6, borderRadius: 3 },
   completionText: { fontSize: 11, fontWeight: '700' },
-  expandArrow: { fontSize: 10, color: colors.muted, width: 16, textAlign: 'center' },
+  expandArrow: { fontSize: 10, color: colors.muted, width: 16, textAlign: 'center', marginRight: 12 },
   catActions: { flexDirection: 'row', gap: 5 },
   iconBtn: {
     paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.sm,
