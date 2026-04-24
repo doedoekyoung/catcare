@@ -317,7 +317,9 @@ export default function RecordsScreen() {
                         </View>
                       </View>
                       {activeCatFilter === null && (
-                        <Text style={[styles.chev, isOpen && styles.chevOpen]}>▾</Text>
+                        <Text style={[styles.chev, isOpen && { color: colors.brownMid }]}>
+                          {isOpen ? '▲' : '▼'}
+                        </Text>
                       )}
                     </TouchableOpacity>
 
@@ -654,8 +656,7 @@ const styles = StyleSheet.create({
   catDot: { width: 12, height: 12, borderRadius: 6 },
   catName: { fontSize: 15, fontWeight: '600', color: colors.charcoal },
   catSum: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  chev: { fontSize: 14, color: colors.muted, transform: [{ rotate: '0deg' }] },
-  chevOpen: { color: colors.brownMid, transform: [{ rotate: '180deg' }] },
+  chev: { fontSize: 10, color: colors.muted, width: 16, textAlign: 'center' },
   catCardBody: {
     paddingHorizontal: 16, paddingVertical: 14, gap: 10,
     borderTopWidth: 1, borderTopColor: colors.border,
