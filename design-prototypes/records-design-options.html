@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>CatCare — 기록 탭 디자인 옵션</title>
+<style>
+  :root{
+    --cream:#FAF6F0; --warm:#FFFDF9; --caramel:#C4956A; --sand:#E8DDD0;
+    --brown:#6B4F3A; --border:#DDD0C4; --text:#2C2420; --muted:#8C7B70;
+    --soft:#F4ECE0; --green:#7FA682; --red:#C96A6A;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#EDE5D8;font-family:'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:var(--text)}
+  body{padding:24px 16px 80px}
+  h1{font-size:20px;margin:0 0 6px;color:var(--brown)}
+  .lead{color:var(--muted);font-size:13px;margin:0 0 20px;max-width:820px;line-height:1.6}
+  .option-nav{max-width:1100px;margin:0 auto 20px;display:flex;flex-wrap:wrap;gap:8px}
+  .option-nav button{
+    border:1px solid var(--border);background:var(--warm);color:var(--text);
+    padding:8px 14px;border-radius:18px;font-size:13px;cursor:pointer;font-family:inherit
+  }
+  .option-nav button.active{background:var(--brown);color:#fff;border-color:var(--brown)}
+  .stage{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:430px 1fr;gap:32px;align-items:flex-start}
+  @media (max-width:900px){.stage{grid-template-columns:1fr}}
+  .frame{
+    width:430px;max-width:100%;background:var(--cream);border-radius:32px;
+    box-shadow:0 10px 30px rgba(107,79,58,.12);overflow:hidden;
+    border:1px solid var(--border);position:relative
+  }
+  .frame-head{background:var(--warm);padding:14px 20px;border-bottom:1px solid var(--border)}
+  .frame-head h2{margin:0;font-size:17px;color:var(--brown);font-weight:600}
+  .frame-head p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+  .tabs{display:flex;background:var(--warm);border-bottom:1px solid var(--border)}
+  .tabs .tab{flex:1;padding:12px 0;text-align:center;font-size:14px;color:var(--muted);cursor:pointer}
+  .tabs .tab.active{color:var(--brown);font-weight:600;border-bottom:2px solid var(--brown)}
+  .body{padding:18px 18px 28px;min-height:620px}
+  .date-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .date-nav .arrow{width:32px;height:32px;border-radius:50%;background:var(--warm);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--brown);font-size:14px}
+  .date-nav .date{font-weight:600;color:var(--brown)}
+  .summary-card{background:var(--warm);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:14px}
+  .summary-card h3{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:500;letter-spacing:.3px}
+  .metric-row{display:flex;flex-wrap:wrap;gap:8px}
+  .metric{background:var(--soft);border-radius:12px;padding:8px 12px;min-width:calc(50% - 4px);flex:1}
+  .metric .label{font-size:11px;color:var(--muted)}
+  .metric .value{font-size:15px;color:var(--text);font-weight:600;margin-top:2px}
+  .metric.empty .value{color:var(--caramel);font-weight:500}
+  .routine-line{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);padding:6px 2px;border-top:1px dashed var(--border);margin-top:10px;padding-top:10px}
+  .routine-line b{color:var(--brown);font-weight:600}
+  .section-title{font-size:13px;color:var(--muted);margin:18px 2px 8px;letter-spacing:.3px}
+  .memo-card{background:var(--warm);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .memo-card .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:6px}
+  .memo-card .text{font-size:14px;color:var(--text);line-height:1.55}
+  .memo-card .tag{background:var(--soft);color:var(--brown);padding:2px 8px;border-radius:10px;font-size:11px}
+  .add-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;border:1px dashed var(--border);border-radius:14px;background:transparent;color:var(--caramel);font-size:14px;font-weight:500;margin-top:6px;cursor:pointer;font-family:inherit}
+  .cta{display:block;width:100%;padding:14px;background:var(--brown);color:#fff;border:none;border-radius:14px;font-size:14px;font-weight:600;margin-top:14px;cursor:pointer;font-family:inherit}
+  .feed-day{margin-bottom:22px}
+  .feed-day h4{margin:0 0 8px;font-size:13px;color:var(--brown);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .feed-day h4 span{font-size:11px;color:var(--muted);font-weight:400}
+  .inline-input{width:100%;background:var(--warm);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--muted);margin-top:6px;font-family:inherit}
+  .calendar{background:var(--warm);border:1px solid var(--border);border-radius:16px;padding:16px}
+  .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .cal-head b{color:var(--brown);font-size:15px}
+  .cal-head .nav{display:flex;gap:8px}
+  .cal-head .nav span{width:26px;height:26px;border-radius:50%;background:var(--soft);color:var(--brown);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border)}
+  .days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding-top:8px}
+  .day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;color:var(--text);border-radius:10px;position:relative}
+  .day.muted{color:var(--border)}
+  .day.today{background:var(--soft);color:var(--brown);font-weight:700}
+  .day.selected{background:var(--brown);color:#fff;font-weight:700}
+  .day .dots{position:absolute;bottom:4px;display:flex;gap:2px}
+  .day .dots i{width:4px;height:4px;border-radius:50%;display:inline-block}
+  .dot-memo{background:var(--caramel)}
+  .dot-miss{background:var(--red)}
+  .dot-done{background:var(--green)}
+  .legend{display:flex;gap:12px;font-size:11px;color:var(--muted);margin-top:10px;padding-left:2px}
+  .legend i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:1px}
+  .day-sheet{background:var(--warm);border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:14px}
+  .day-sheet h5{margin:0 0 8px;color:var(--brown);font-size:14px}
+  .day-sheet .sub{font-size:12px;color:var(--muted);margin-bottom:8px}
+  .day-sheet .missed{font-size:13px;color:var(--red);margin:4px 0}
+
+  /* 홈 프리뷰 */
+  .home-nav{background:var(--warm);padding:12px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .home-nav b{color:var(--brown);font-size:16px}
+  .cat-chips{display:flex;gap:6px;padding:12px 16px;background:var(--cream);overflow-x:auto;border-bottom:1px solid var(--border)}
+  .cat-chips span{padding:6px 12px;border-radius:14px;background:var(--warm);border:1px solid var(--border);font-size:12px;color:var(--muted);white-space:nowrap}
+  .cat-chips span.active{background:var(--brown);color:#fff;border-color:var(--brown)}
+  .routine-box{background:var(--warm);border:1px solid var(--border);border-radius:14px;padding:10px 14px;margin:10px 16px;display:flex;justify-content:space-between;align-items:center}
+  .routine-box .name{font-size:14px}
+  .routine-box .check{width:22px;height:22px;border-radius:50%;border:2px solid var(--border)}
+  .routine-box.done .check{background:var(--green);border-color:var(--green)}
+  .routine-box.done .name{color:var(--muted);text-decoration:line-through}
+  .float-btn{
+    position:absolute;right:18px;bottom:88px;
+    background:var(--brown);color:#fff;border:none;border-radius:26px;
+    padding:12px 18px;font-size:13px;font-weight:600;
+    box-shadow:0 6px 16px rgba(107,79,58,.3);display:flex;align-items:center;gap:6px;cursor:pointer;font-family:inherit
+  }
+  .float-btn .plus{font-size:18px;font-weight:400;line-height:1}
+  .bottom-tabs{position:absolute;left:0;right:0;bottom:0;background:var(--warm);border-top:1px solid var(--border);display:flex;padding:10px 0 18px}
+  .bottom-tabs .bt{flex:1;text-align:center;font-size:11px;color:var(--muted)}
+  .bottom-tabs .bt.active{color:var(--brown);font-weight:700}
+  .bottom-tabs .bt .icon{display:block;font-size:15px;margin-bottom:3px}
+
+  /* 설명 패널 */
+  .info{background:var(--warm);border:1px solid var(--border);border-radius:16px;padding:22px 24px}
+  .info h3{margin:0 0 10px;font-size:16px;color:var(--brown)}
+  .info p{margin:0 0 12px;font-size:13px;line-height:1.7;color:var(--text)}
+  .info ul{margin:0 0 12px;padding-left:18px;font-size:13px;line-height:1.7;color:var(--text)}
+  .info .pros,.info .cons{background:var(--cream);border-radius:10px;padding:10px 14px;margin-top:8px}
+  .info .pros b{color:var(--green)}
+  .info .cons b{color:var(--red)}
+  .pane{display:none}
+  .pane.active{display:grid}
+
+  /* opt6 — chip + 아코디언 */
+  .chip-row{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 12px;margin-bottom:4px}
+  .chip-row .chip{padding:6px 14px;border-radius:14px;background:var(--warm);border:1px solid var(--border);font-size:12px;color:var(--muted);white-space:nowrap;cursor:pointer;font-family:inherit}
+  .chip-row .chip.active{background:var(--brown);color:#fff;border-color:var(--brown)}
+  .cat-card{background:var(--warm);border:1px solid var(--border);border-radius:16px;margin-bottom:10px;overflow:hidden}
+  .cat-card-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer}
+  .cat-card-head .left{display:flex;flex-direction:column}
+  .cat-card-head .name{font-size:15px;font-weight:600;color:var(--brown)}
+  .cat-card-head .sum{font-size:12px;color:var(--muted);margin-top:3px}
+  .cat-card-head .chev{color:var(--muted);font-size:14px;transition:transform .2s}
+  .cat-card.open .cat-card-head .chev{transform:rotate(180deg);color:var(--brown)}
+  .cat-card-body{display:none;padding:0 16px 16px;border-top:1px dashed var(--border)}
+  .cat-card.open .cat-card-body{display:block}
+  .preset-title{font-size:11px;color:var(--muted);letter-spacing:.3px;margin:14px 2px 8px;text-transform:uppercase}
+  .seg{display:flex;gap:4px;background:var(--soft);padding:3px;border-radius:10px;margin-top:4px}
+  .seg button{flex:1;border:none;background:transparent;font-size:12px;color:var(--muted);padding:6px 0;border-radius:8px;cursor:pointer;font-family:inherit}
+  .seg button.on{background:#fff;color:var(--brown);font-weight:600;box-shadow:0 1px 2px rgba(107,79,58,.08)}
+  .num-field{display:flex;align-items:center;background:var(--soft);border-radius:10px;padding:6px 10px;margin-top:4px}
+  .num-field input{flex:1;border:none;background:transparent;font-size:14px;color:var(--text);outline:none;font-family:inherit;font-weight:600}
+  .num-field .unit{color:var(--muted);font-size:12px}
+  .check-field{display:flex;align-items:center;gap:8px;background:var(--soft);border-radius:10px;padding:8px 12px;margin-top:4px;font-size:13px}
+  .check-field .box{width:18px;height:18px;border-radius:5px;border:2px solid var(--border);background:#fff;flex-shrink:0}
+  .check-field.on .box{background:var(--green);border-color:var(--green)}
+  .check-field.on .label{color:var(--brown);font-weight:600}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cell .label{font-size:11px;color:var(--muted)}
+  .custom-badge{display:inline-block;font-size:10px;color:var(--caramel);background:var(--soft);padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:1px}
+  .mini-memo{background:var(--cream);border-radius:10px;padding:10px 12px;font-size:13px;margin-top:8px;color:var(--text)}
+  .mini-memo .meta{font-size:11px;color:var(--muted);margin-bottom:4px}
+  .add-mini{display:flex;align-items:center;justify-content:center;gap:4px;width:100%;padding:10px;border:1px dashed var(--border);border-radius:10px;background:transparent;color:var(--caramel);font-size:13px;margin-top:8px;cursor:pointer;font-family:inherit}
+
+  /* opt7 — 플랫 구조 */
+  .top-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+  .date-pill{display:flex;align-items:center;gap:10px;flex:1}
+  .date-pill .arrow{width:28px;height:28px;border-radius:50%;background:var(--warm);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--brown);font-size:13px;cursor:pointer}
+  .date-pill .date{font-weight:600;color:var(--brown);font-size:14px}
+  .cal-icon{
+    width:36px;height:36px;border-radius:10px;background:var(--warm);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;color:var(--brown);cursor:pointer;
+    font-size:16px;flex-shrink:0
+  }
+  .filter-row{display:flex;justify-content:flex-end;margin-bottom:10px}
+  .filter-pill{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:5px 10px;border-radius:14px;background:var(--soft);
+    color:var(--muted);font-size:12px;cursor:pointer;border:none;font-family:inherit
+  }
+  .filter-pill b{color:var(--brown);font-weight:600}
+  .filter-pill .caret{font-size:9px;margin-left:1px}
+  .dropdown{
+    position:absolute;right:18px;top:186px;background:#fff;border:1px solid var(--border);
+    border-radius:12px;box-shadow:0 8px 20px rgba(107,79,58,.18);
+    padding:6px;min-width:140px;z-index:20;display:none
+  }
+  .dropdown.open{display:block}
+  .dropdown button{
+    display:block;width:100%;text-align:left;padding:8px 12px;background:transparent;border:none;
+    font-size:13px;color:var(--text);border-radius:8px;cursor:pointer;font-family:inherit
+  }
+  .dropdown button:hover{background:var(--cream)}
+  .dropdown button.on{background:var(--soft);color:var(--brown);font-weight:600}
+
+  /* 달력 시트 오버레이 */
+  .sheet-overlay{
+    position:absolute;inset:0;background:rgba(44,36,32,.35);
+    display:none;align-items:flex-end;z-index:30;border-radius:32px;overflow:hidden
+  }
+  .sheet-overlay.open{display:flex}
+  .sheet{
+    width:100%;background:var(--cream);border-radius:24px 24px 0 0;
+    padding:8px 18px 24px;max-height:78%;overflow:auto;animation:slideUp .25s ease
+  }
+  @keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .sheet .handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:6px auto 12px}
+  .sheet .sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .sheet .sheet-head b{color:var(--brown);font-size:15px}
+  .sheet .close{background:transparent;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1}
+
+  /* opt8 — 메모만 */
+  .tag-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tag{padding:5px 12px;border-radius:14px;background:var(--soft);color:var(--muted);font-size:12px;cursor:pointer;border:1px solid transparent;font-family:inherit}
+  .tag.on{background:var(--brown);color:#fff;border-color:var(--brown)}
+  .write-box{
+    background:var(--warm);border:1px solid var(--border);border-radius:16px;
+    padding:14px;margin-bottom:12px
+  }
+  .write-box textarea{
+    width:100%;border:none;background:transparent;outline:none;
+    font-family:inherit;font-size:14px;line-height:1.6;color:var(--text);
+    resize:none;min-height:80px
+  }
+  .write-box textarea::placeholder{color:var(--muted)}
+  .write-foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:10px;border-top:1px dashed var(--border)}
+  .write-foot .hint{font-size:11px;color:var(--muted)}
+  .save-btn{background:var(--brown);color:#fff;border:none;padding:8px 18px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .save-btn:disabled{background:var(--sand);color:var(--muted);cursor:not-allowed}
+  .feed-group{margin-bottom:18px}
+  .feed-group h4{margin:0 0 10px;font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.3px;padding-left:2px}
+  .feed-item{
+    background:var(--warm);border:1px solid var(--border);border-radius:12px;
+    padding:12px 14px;margin-bottom:8px
+  }
+  .feed-item .fi-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .feed-item .fi-tag{font-size:11px;background:var(--soft);color:var(--brown);padding:2px 8px;border-radius:10px;font-weight:600}
+  .feed-item .fi-time{font-size:11px;color:var(--muted)}
+  .feed-item .fi-text{font-size:13.5px;line-height:1.55;color:var(--text)}
+  .fi-empty{color:var(--muted);font-size:13px;text-align:center;padding:20px 10px}
+</style>
+</head>
+<body>
+
+<h1>기록 탭 디자인 옵션</h1>
+<p class="lead">
+  "매일 규칙적으로 기입하는 기록" 니즈에 맞춘 여섯 가지 변형.
+  공통 구조: <b>기록 탭에 [쓰기] / [달력] 두 서브탭</b>, 홈은 루틴 체크 중심.
+  상단 버튼을 눌러 옵션을 전환해보세요.
+</p>
+
+<nav class="option-nav">
+  <button data-target="opt1" class="active">① 쓰기 · 오늘 모드</button>
+  <button data-target="opt2">② 쓰기 · 피드 모드</button>
+  <button data-target="opt3">③ 달력 · 탭하면 확장</button>
+  <button data-target="opt4">④ 홈 · 플로팅 +특이사항</button>
+  <button data-target="opt5">⑤ 통합 플로우</button>
+  <button data-target="opt6">⑥ 다묘 · chip + 아코디언 (메모만)</button>
+  <button data-target="opt7">⑦ 플랫 구조 (A+B)</button>
+  <button data-target="opt8">⑧ 메모만 (미니멀)</button>
+</nav>
+
+<!-- ───────── ① 쓰기 · 오늘 모드 ───────── -->
+<section class="stage pane active" id="opt1">
+  <div class="frame">
+    <div class="frame-head"><h2>기록</h2><p>오늘 하루를 한 페이지에</p></div>
+    <div class="tabs"><div class="tab active">쓰기</div><div class="tab">달력</div></div>
+    <div class="body">
+      <div class="date-nav">
+        <div class="arrow">‹</div>
+        <div class="date">4월 20일 (월) · 오늘</div>
+        <div class="arrow">›</div>
+      </div>
+
+      <div class="summary-card">
+        <h3>오늘의 기록</h3>
+        <div class="metric-row">
+          <div class="metric"><div class="label">몸무게</div><div class="value">4.2 kg</div></div>
+          <div class="metric"><div class="label">식욕</div><div class="value">보통</div></div>
+          <div class="metric empty"><div class="label">구토</div><div class="value">+ 입력</div></div>
+          <div class="metric empty"><div class="label">배변</div><div class="value">+ 입력</div></div>
+        </div>
+        <div class="routine-line"><span>오늘 루틴</span><span><b>8</b> / 10 완료</span></div>
+      </div>
+
+      <div class="section-title">메모</div>
+      <div class="memo-card">
+        <div class="meta"><span class="tag">나비</span><span>오전 9:12</span></div>
+        <div class="text">사료를 평소보다 적게 먹음. 물은 잘 마심.</div>
+      </div>
+      <div class="memo-card">
+        <div class="meta"><span class="tag">전체</span><span>오후 2:40</span></div>
+        <div class="text">거실 창가에서 오래 쉬는 모습. 컨디션 양호.</div>
+      </div>
+      <button class="add-btn"><span>+</span> 메모 추가</button>
+    </div>
+  </div>
+
+  <div class="info">
+    <h3>① 쓰기 · 오늘 모드</h3>
+    <p>하루 = 한 페이지. 날짜 네비게이션으로 과거로 이동. 상단엔 프리셋(몸무게·식욕·구토·배변) 요약 카드, 하단엔 메모 리스트.</p>
+    <ul>
+      <li>규칙적 기입자가 같은 자리를 매일 채우는 감각</li>
+      <li>프리셋은 빈칸(+ 입력)이 시각적 힌트</li>
+      <li>메모는 "한 줄 관찰" 용도로 경량화</li>
+    </ul>
+    <div class="pros"><b>장점</b> — 구조화된 기록이 우선. 빈 칸이 보여서 작성률 상승.</div>
+    <div class="cons"><b>주의</b> — 다묘 가정이면 프리셋을 고양이별로 분리할지 결정 필요.</div>
+  </div>
+</section>
+
+<!-- ───────── ② 쓰기 · 피드 모드 ───────── -->
+<section class="stage pane" id="opt2">
+  <div class="frame">
+    <div class="frame-head"><h2>기록</h2><p>최근 날짜를 스크롤하며 바로 기입</p></div>
+    <div class="tabs"><div class="tab active">쓰기</div><div class="tab">달력</div></div>
+    <div class="body">
+      <div class="feed-day">
+        <h4>4월 20일 (월) · 오늘 <span>루틴 8/10 · 메모 2</span></h4>
+        <div class="memo-card">
+          <div class="meta"><span class="tag">나비</span><span>오전 9:12</span></div>
+          <div class="text">사료를 평소보다 적게 먹음.</div>
+        </div>
+        <input class="inline-input" placeholder="오늘 관찰한 내용을 적어보세요" />
+      </div>
+
+      <div class="feed-day">
+        <h4>4월 19일 (일) <span>루틴 10/10 · 메모 1</span></h4>
+        <div class="memo-card">
+          <div class="meta"><span class="tag">전체</span><span>오후 6:30</span></div>
+          <div class="text">간식 먹고 나서 다들 활발함.</div>
+        </div>
+        <input class="inline-input" placeholder="+ 메모 추가" />
+      </div>
+
+      <div class="feed-day">
+        <h4>4월 18일 (토) <span>루틴 9/10 · 메모 0</span></h4>
+        <input class="inline-input" placeholder="+ 메모 추가" />
+      </div>
+    </div>
+  </div>
+
+  <div class="info">
+    <h3>② 쓰기 · 피드 모드</h3>
+    <p>최근 N일을 세로로 쌓아놓고, 각 날짜마다 인라인 입력창. 일기앱처럼 쭉 읽히는 구조.</p>
+    <ul>
+      <li>"어제 뭐 썼더라" 확인하면서 오늘 기입 가능</li>
+      <li>빈 날짜도 인라인 입력창이 유도</li>
+      <li>날짜 네비게이션 조작이 필요 없음</li>
+    </ul>
+    <div class="pros"><b>장점</b> — 과거 기록이 자연스럽게 보임. 회고에 유리.</div>
+    <div class="cons"><b>주의</b> — 프리셋(몸무게·식욕 등)을 어떻게 배치할지 고민 필요 — 카드가 커져서 피드가 무거워짐.</div>
+  </div>
+</section>
+
+<!-- ───────── ③ 달력 · 탭하면 확장 ───────── -->
+<section class="stage pane" id="opt3">
+  <div class="frame">
+    <div class="frame-head"><h2>기록</h2><p>달력에서 날짜를 탭하면 요약이 열림</p></div>
+    <div class="tabs"><div class="tab">쓰기</div><div class="tab active">달력</div></div>
+    <div class="body">
+      <div class="calendar">
+        <div class="cal-head">
+          <b>2026년 4월</b>
+          <div class="nav"><span>‹</span><span>›</span></div>
+        </div>
+        <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+        <div class="days">
+          <div class="day muted">30</div>
+          <div class="day">1<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">2<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">3<div class="dots"><i class="dot-miss"></i></div></div>
+          <div class="day">4<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">5<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">6<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">7<div class="dots"><i class="dot-miss"></i><i class="dot-memo"></i></div></div>
+          <div class="day">8<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">9<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">10<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">11<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">12<div class="dots"><i class="dot-miss"></i></div></div>
+          <div class="day">13<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">14<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">15<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">16<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">17<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">18<div class="dots"><i class="dot-miss"></i></div></div>
+          <div class="day">19<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day selected">20<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">21</div>
+          <div class="day">22</div>
+          <div class="day">23</div>
+          <div class="day">24</div>
+          <div class="day">25</div>
+          <div class="day">26</div>
+          <div class="day">27</div>
+          <div class="day">28</div>
+          <div class="day">29</div>
+          <div class="day">30</div>
+        </div>
+        <div class="legend">
+          <span><i class="dot-done"></i>루틴 완료</span>
+          <span><i class="dot-miss"></i>미완료</span>
+          <span><i class="dot-memo"></i>메모</span>
+        </div>
+      </div>
+
+      <div class="day-sheet">
+        <h5>4월 20일 (월) · 오늘</h5>
+        <div class="sub">루틴 8 / 10 완료 · 메모 2개</div>
+        <div class="missed">· 못한 루틴: 저녁 사료 (치즈)</div>
+        <div class="memo-card" style="margin-top:10px">
+          <div class="meta"><span class="tag">나비</span><span>오전 9:12</span></div>
+          <div class="text">사료를 평소보다 적게 먹음.</div>
+        </div>
+        <button class="cta">이 날짜로 쓰기 탭 열기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="info">
+    <h3>③ 달력 · 탭하면 확장</h3>
+    <p>달력 셀에 점(루틴·메모) 표시. 날짜를 누르면 <b>아래 요약 카드</b>가 열리고, "이 날짜로 쓰기 탭 열기"로 편집으로 진입.</p>
+    <ul>
+      <li>요약은 캘린더 안에서 — 컨텍스트 유지</li>
+      <li>편집이 필요할 때만 쓰기 탭으로 점프</li>
+      <li>못한 루틴이 한눈에 보임</li>
+    </ul>
+    <div class="pros"><b>장점</b> — 달력 탭에서 회고와 편집 진입을 한 흐름에.</div>
+    <div class="cons"><b>주의</b> — 쓰기 탭과 달력 탭의 역할 분리가 덜 뚜렷해질 수 있음 (요약 기능 중복).</div>
+  </div>
+</section>
+
+<!-- ───────── ④ 홈 · 플로팅 +특이사항 ───────── -->
+<section class="stage pane" id="opt4">
+  <div class="frame">
+    <div class="home-nav"><b>오늘의 돌봄</b><span style="font-size:12px;color:var(--muted)">4월 20일</span></div>
+    <div class="cat-chips">
+      <span class="active">전체</span><span>나비</span><span>치즈</span><span>루나</span>
+    </div>
+    <div class="routine-box done"><span class="name">아침 사료 · 나비</span><span class="check"></span></div>
+    <div class="routine-box done"><span class="name">아침 사료 · 치즈</span><span class="check"></span></div>
+    <div class="routine-box"><span class="name">점심 간식 · 전체</span><span class="check"></span></div>
+    <div class="routine-box done"><span class="name">저녁 사료 · 나비</span><span class="check"></span></div>
+    <div class="routine-box"><span class="name">저녁 사료 · 치즈</span><span class="check"></span></div>
+    <div class="routine-box"><span class="name">화장실 청소</span><span class="check"></span></div>
+
+    <button class="float-btn"><span class="plus">+</span> 특이사항</button>
+
+    <div class="bottom-tabs">
+      <div class="bt active"><span class="icon">●</span>홈</div>
+      <div class="bt"><span class="icon">○</span>고양이</div>
+      <div class="bt"><span class="icon">○</span>기록</div>
+      <div class="bt"><span class="icon">○</span>설정</div>
+    </div>
+  </div>
+
+  <div class="info">
+    <h3>④ 홈 · 플로팅 + 특이사항 버튼</h3>
+    <p>홈에서 스크롤하지 않아도 즉시 메모를 남길 수 있는 <b>빠른 진입점</b>. 탭하면 작은 시트가 열려 오늘 날짜·고양이 선택·한 줄 입력 후 저장.</p>
+    <ul>
+      <li>"방금 토했다" 같은 즉시 관찰을 놓치지 않음</li>
+      <li>정식 기록(쓰기 탭)과 별개의 "quick capture" 경로</li>
+      <li>입력 내용은 기록 탭에 자동 반영됨</li>
+    </ul>
+    <div class="pros"><b>장점</b> — 접근성 최상. 모바일에서 엄지로 한 번.</div>
+    <div class="cons"><b>주의</b> — 홈 공간을 조금 가림. 체크리스트 스크롤 시 방해되지 않도록 색·크기 조정 필요.</div>
+  </div>
+</section>
+
+<!-- ───────── ⑤ 통합 플로우 ───────── -->
+<section class="stage pane" id="opt5">
+  <div class="frame" id="flow-frame">
+    <div class="frame-head"><h2>기록</h2><p id="flow-sub">쓰기 → 달력 전환 데모 (프레임 클릭)</p></div>
+    <div class="tabs" id="flow-tabs">
+      <div class="tab active" data-flow="write">쓰기</div>
+      <div class="tab" data-flow="cal">달력</div>
+    </div>
+
+    <div class="body" id="flow-write">
+      <div class="date-nav">
+        <div class="arrow">‹</div>
+        <div class="date">4월 20일 (월) · 오늘</div>
+        <div class="arrow">›</div>
+      </div>
+      <div class="summary-card">
+        <h3>오늘의 기록</h3>
+        <div class="metric-row">
+          <div class="metric"><div class="label">몸무게</div><div class="value">4.2 kg</div></div>
+          <div class="metric"><div class="label">식욕</div><div class="value">보통</div></div>
+          <div class="metric empty"><div class="label">구토</div><div class="value">+ 입력</div></div>
+          <div class="metric empty"><div class="label">배변</div><div class="value">+ 입력</div></div>
+        </div>
+        <div class="routine-line"><span>오늘 루틴</span><span><b>8</b> / 10 완료</span></div>
+      </div>
+      <div class="section-title">메모</div>
+      <div class="memo-card">
+        <div class="meta"><span class="tag">나비</span><span>오전 9:12</span></div>
+        <div class="text">사료를 평소보다 적게 먹음.</div>
+      </div>
+      <button class="add-btn"><span>+</span> 메모 추가</button>
+    </div>
+
+    <div class="body" id="flow-cal" style="display:none">
+      <div class="calendar">
+        <div class="cal-head">
+          <b>2026년 4월</b>
+          <div class="nav"><span>‹</span><span>›</span></div>
+        </div>
+        <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+        <div class="days">
+          <div class="day muted">30</div>
+          <div class="day">1<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">2<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">3<div class="dots"><i class="dot-miss"></i></div></div>
+          <div class="day">4<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">5<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">6<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">7<div class="dots"><i class="dot-miss"></i><i class="dot-memo"></i></div></div>
+          <div class="day">8<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">9<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">10<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">11<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">12<div class="dots"><i class="dot-miss"></i></div></div>
+          <div class="day">13<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">14<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">15<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">16<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">17<div class="dots"><i class="dot-done"></i></div></div>
+          <div class="day">18<div class="dots"><i class="dot-miss"></i></div></div>
+          <div class="day">19<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day selected">20<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+          <div class="day">21</div><div class="day">22</div><div class="day">23</div>
+          <div class="day">24</div><div class="day">25</div><div class="day">26</div>
+          <div class="day">27</div><div class="day">28</div><div class="day">29</div>
+          <div class="day">30</div>
+        </div>
+        <div class="legend">
+          <span><i class="dot-done"></i>루틴 완료</span>
+          <span><i class="dot-miss"></i>미완료</span>
+          <span><i class="dot-memo"></i>메모</span>
+        </div>
+      </div>
+      <div class="day-sheet">
+        <h5>4월 20일 (월)</h5>
+        <div class="sub">루틴 8 / 10 완료 · 메모 2개</div>
+        <div class="missed">· 못한 루틴: 저녁 사료 (치즈)</div>
+        <button class="cta">이 날짜로 쓰기 탭 열기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="info">
+    <h3>⑤ 통합 플로우</h3>
+    <p>프레임 상단의 <b>쓰기 / 달력</b> 서브탭을 눌러 전환. 달력에서 "이 날짜로 쓰기 탭 열기" → 쓰기 탭이 그 날짜로 이동하는 흐름의 미니 데모.</p>
+    <ul>
+      <li>일상: 쓰기 탭 → 오늘 기록</li>
+      <li>회고: 달력 탭 → 점으로 확인 → 필요 시 쓰기 탭으로 점프</li>
+      <li>홈은 루틴 체크에 집중 (선택적으로 ④ 플로팅 버튼 추가)</li>
+    </ul>
+    <div class="pros"><b>장점</b> — 역할 분리가 명확: 쓰기=입력, 달력=조망.</div>
+    <div class="cons"><b>주의</b> — "이 날짜로 쓰기 탭 열기" 네비게이션을 잘 설계해야 혼란이 없음.</div>
+  </div>
+</section>
+
+<!-- ───────── ⑥ 다묘 · chip + 아코디언 ───────── -->
+<section class="stage pane" id="opt6">
+  <div class="frame">
+    <div class="frame-head"><h2>기록</h2><p>다묘 가정을 위한 chip + 아코디언</p></div>
+    <div class="tabs"><div class="tab active">쓰기</div><div class="tab">달력</div></div>
+    <div class="body">
+      <div class="date-nav">
+        <div class="arrow">‹</div>
+        <div class="date">4월 20일 (월) · 오늘</div>
+        <div class="arrow">›</div>
+      </div>
+
+      <div class="chip-row" id="opt6-chips">
+        <button class="chip active" data-cat="all">전체</button>
+        <button class="chip" data-cat="nabi">나비</button>
+        <button class="chip" data-cat="cheese">치즈</button>
+        <button class="chip" data-cat="luna">루나</button>
+      </div>
+
+      <!-- 전체 요약: "전체" 탭에서만 노출 -->
+      <div class="summary-card" id="opt6-summary">
+        <h3>오늘 전체 요약</h3>
+        <div class="routine-line" style="border:none;margin:0;padding:0">
+          <span>오늘 루틴</span><span><b>8</b> / 10 완료 · 메모 3개</span>
+        </div>
+      </div>
+
+      <!-- 나비 카드 (전체 탭에서 펼쳐진 예시) -->
+      <div class="cat-card open" data-cat-card="nabi">
+        <div class="cat-card-head">
+          <div class="left">
+            <div class="name">나비</div>
+            <div class="sum">메모 2개</div>
+          </div>
+          <div class="chev">▾</div>
+        </div>
+        <div class="cat-card-body">
+          <div class="preset-title">오늘의 메모</div>
+          <div class="mini-memo">
+            <div class="meta">오전 9:12</div>
+            사료를 평소보다 적게 먹음. 물은 잘 마심.
+          </div>
+          <div class="mini-memo">
+            <div class="meta">오후 3:40</div>
+            몸무게 4.2kg. 지난주랑 동일.
+          </div>
+          <button class="add-mini"><span>+</span> 메모 추가</button>
+        </div>
+      </div>
+
+      <!-- 치즈 카드 (접힘) -->
+      <div class="cat-card" data-cat-card="cheese">
+        <div class="cat-card-head">
+          <div class="left">
+            <div class="name">치즈</div>
+            <div class="sum">메모 1개</div>
+          </div>
+          <div class="chev">▾</div>
+        </div>
+        <div class="cat-card-body">
+          <div class="preset-title">오늘의 메모</div>
+          <div class="mini-memo"><div class="meta">오후 1:00</div>간식 후 창가에서 잠. 컨디션 좋음.</div>
+          <button class="add-mini"><span>+</span> 메모 추가</button>
+        </div>
+      </div>
+
+      <!-- 루나 카드 (접힘, 빈 기록) -->
+      <div class="cat-card" data-cat-card="luna">
+        <div class="cat-card-head">
+          <div class="left">
+            <div class="name">루나</div>
+            <div class="sum" style="color:var(--caramel)">오늘 메모 없음 · 탭해서 추가</div>
+          </div>
+          <div class="chev">▾</div>
+        </div>
+        <div class="cat-card-body">
+          <div class="preset-title">오늘의 메모</div>
+          <button class="add-mini"><span>+</span> 메모 추가</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info">
+    <h3>⑥ 다묘 · chip + 아코디언 (메모 전용)</h3>
+    <p>다묘 가정에서 <b>고양이별 메모</b>를 정리하는 구조. 프리셋(몸무게·식욕·구토 등) 없이 자유 메모만.</p>
+    <ul>
+      <li><b>전체 chip</b>: 상단 요약 + 고양이 카드 리스트 (첫 카드만 펼침). 헤더 탭으로 아코디언 확장/수축.</li>
+      <li><b>개별 chip(나비/치즈/루나)</b>: 요약 숨김, 그 고양이 카드만 펼쳐진 단일 뷰 — "지금은 이 녀석만" 몰입.</li>
+      <li><b>메모만</b>: 카드 본문은 오늘 메모 리스트 + "+ 메모 추가" 버튼. 사용자 자유 기입 (예: "몸무게 4.2kg"라고 직접 쓰면 됨).</li>
+      <li><b>빈 상태 힌트</b>: 메모 없는 고양이는 헤더에 안내 문구로 기입 유도.</li>
+    </ul>
+    <div class="pros"><b>장점</b> — 고양이별 정리 + 자유 기입 둘 다 충족. 기존 <code>daily_logs</code> 그대로 재사용.</div>
+    <div class="cons"><b>주의</b> — 카드 펼침/접힘 상태가 날짜 이동 시 리셋될지 유지될지 결정 필요 (권장: 리셋 — 매일 동일 UX).</div>
+    <p style="margin-top:12px;color:var(--muted);font-size:12px">※ 프레임 안에서 chip을 클릭해 전환해보세요.</p>
+  </div>
+</section>
+
+<!-- ───────── ⑦ 플랫 구조 (A+B 조합) ───────── -->
+<section class="stage pane" id="opt7">
+  <div class="frame" style="position:relative">
+    <div class="frame-head"><h2>기록</h2><p>서브탭 없음 · 달력은 시트 · 고양이는 필터</p></div>
+
+    <div class="body" style="position:relative">
+      <!-- 상단 바: 날짜 네비 + 달력 아이콘 -->
+      <div class="top-bar">
+        <div class="date-pill">
+          <span class="arrow">‹</span>
+          <span class="date">4월 20일 (월) · 오늘</span>
+          <span class="arrow">›</span>
+        </div>
+        <button class="cal-icon" id="opt7-cal-btn" title="달력 열기">▦</button>
+      </div>
+
+      <!-- 고양이 필터 (탭 아닌 필터 시각) -->
+      <div class="filter-row">
+        <button class="filter-pill" id="opt7-filter-btn">
+          <span>고양이</span>
+          <b id="opt7-filter-label">전체</b>
+          <span class="caret">▼</span>
+        </button>
+      </div>
+
+      <!-- 드롭다운 -->
+      <div class="dropdown" id="opt7-dropdown">
+        <button class="on" data-cat="all">전체</button>
+        <button data-cat="nabi">나비</button>
+        <button data-cat="cheese">치즈</button>
+        <button data-cat="luna">루나</button>
+      </div>
+
+      <!-- 전체 요약 -->
+      <div class="summary-card" id="opt7-summary">
+        <h3>오늘 전체 요약</h3>
+        <div class="routine-line" style="border:none;margin:0;padding:0">
+          <span>오늘 루틴</span><span><b>8</b> / 10 완료 · 메모 3개</span>
+        </div>
+      </div>
+
+      <!-- 카드 스택 -->
+      <div class="cat-card open" data-o7-card="nabi">
+        <div class="cat-card-head">
+          <div class="left">
+            <div class="name">나비</div>
+            <div class="sum">4.2 kg · 식욕 보통 · 메모 1</div>
+          </div>
+          <div class="chev">▾</div>
+        </div>
+        <div class="cat-card-body">
+          <div class="preset-title">오늘의 기록</div>
+          <div class="grid-2">
+            <div class="cell">
+              <div class="label">몸무게</div>
+              <div class="num-field"><input type="text" value="4.2"><span class="unit">kg</span></div>
+            </div>
+            <div class="cell">
+              <div class="label">식욕</div>
+              <div class="seg">
+                <button>많음</button><button class="on">보통</button><button>적음</button><button>거름</button>
+              </div>
+            </div>
+            <div class="cell">
+              <div class="label">구토</div>
+              <div class="check-field on"><span class="box"></span><span class="label" style="font-size:13px;color:var(--text)">있음 (1회)</span></div>
+            </div>
+            <div class="cell">
+              <div class="label">배변</div>
+              <div class="seg">
+                <button class="on">정상</button><button>묽음</button><button>없음</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="preset-title">커스텀 <span class="custom-badge">나비만</span></div>
+          <div class="grid-2">
+            <div class="cell">
+              <div class="label">약 복용</div>
+              <div class="check-field on"><span class="box"></span><span class="label" style="font-size:13px;color:var(--text)">복용 완료</span></div>
+            </div>
+            <div class="cell">
+              <div class="label">놀이</div>
+              <div class="num-field"><input type="text" value="20"><span class="unit">분</span></div>
+            </div>
+          </div>
+
+          <div class="preset-title">메모</div>
+          <div class="mini-memo">
+            <div class="meta">오전 9:12</div>
+            사료를 평소보다 적게 먹음. 물은 잘 마심.
+          </div>
+          <button class="add-mini"><span>+</span> 메모 추가</button>
+        </div>
+      </div>
+
+      <div class="cat-card" data-o7-card="cheese">
+        <div class="cat-card-head">
+          <div class="left">
+            <div class="name">치즈</div>
+            <div class="sum">3.8 kg · 식욕 많음 · 메모 1</div>
+          </div>
+          <div class="chev">▾</div>
+        </div>
+        <div class="cat-card-body">
+          <div class="preset-title">오늘의 기록</div>
+          <div class="grid-2">
+            <div class="cell">
+              <div class="label">몸무게</div>
+              <div class="num-field"><input type="text" value="3.8"><span class="unit">kg</span></div>
+            </div>
+            <div class="cell">
+              <div class="label">식욕</div>
+              <div class="seg">
+                <button class="on">많음</button><button>보통</button><button>적음</button><button>거름</button>
+              </div>
+            </div>
+            <div class="cell">
+              <div class="label">구토</div>
+              <div class="check-field"><span class="box"></span><span class="label" style="font-size:13px;color:var(--muted)">없음</span></div>
+            </div>
+            <div class="cell">
+              <div class="label">배변</div>
+              <div class="seg">
+                <button class="on">정상</button><button>묽음</button><button>없음</button>
+              </div>
+            </div>
+          </div>
+          <div class="preset-title">메모</div>
+          <div class="mini-memo"><div class="meta">오후 1:00</div>간식 후 창가에서 잠.</div>
+          <button class="add-mini"><span>+</span> 메모 추가</button>
+        </div>
+      </div>
+
+      <div class="cat-card" data-o7-card="luna">
+        <div class="cat-card-head">
+          <div class="left">
+            <div class="name">루나</div>
+            <div class="sum" style="color:var(--caramel)">오늘 기록 없음 · 탭해서 입력</div>
+          </div>
+          <div class="chev">▾</div>
+        </div>
+        <div class="cat-card-body">
+          <div class="preset-title">오늘의 기록</div>
+          <div class="grid-2">
+            <div class="cell">
+              <div class="label">몸무게</div>
+              <div class="num-field"><input type="text" placeholder="kg"><span class="unit">kg</span></div>
+            </div>
+            <div class="cell">
+              <div class="label">식욕</div>
+              <div class="seg">
+                <button>많음</button><button>보통</button><button>적음</button><button>거름</button>
+              </div>
+            </div>
+          </div>
+          <button class="add-mini" style="margin-top:12px"><span>+</span> 메모 추가</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 달력 시트 오버레이 -->
+    <div class="sheet-overlay" id="opt7-sheet">
+      <div class="sheet">
+        <div class="handle"></div>
+        <div class="sheet-head">
+          <b>달력에서 날짜 선택</b>
+          <button class="close" id="opt7-sheet-close">×</button>
+        </div>
+        <div class="calendar" style="padding:12px">
+          <div class="cal-head">
+            <b style="font-size:14px">2026년 4월</b>
+            <div class="nav"><span>‹</span><span>›</span></div>
+          </div>
+          <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+          <div class="days">
+            <div class="day muted">30</div>
+            <div class="day">1<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">2<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+            <div class="day">3<div class="dots"><i class="dot-miss"></i></div></div>
+            <div class="day">4<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">5<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+            <div class="day">6<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">7<div class="dots"><i class="dot-miss"></i><i class="dot-memo"></i></div></div>
+            <div class="day">8<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">9<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">10<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+            <div class="day">11<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">12<div class="dots"><i class="dot-miss"></i></div></div>
+            <div class="day">13<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">14<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">15<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+            <div class="day">16<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">17<div class="dots"><i class="dot-done"></i></div></div>
+            <div class="day">18<div class="dots"><i class="dot-miss"></i></div></div>
+            <div class="day">19<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+            <div class="day selected">20<div class="dots"><i class="dot-done"></i><i class="dot-memo"></i></div></div>
+            <div class="day">21</div><div class="day">22</div><div class="day">23</div>
+            <div class="day">24</div><div class="day">25</div><div class="day">26</div>
+            <div class="day">27</div><div class="day">28</div><div class="day">29</div>
+            <div class="day">30</div>
+          </div>
+          <div class="legend">
+            <span><i class="dot-done"></i>루틴 완료</span>
+            <span><i class="dot-miss"></i>미완료</span>
+            <span><i class="dot-memo"></i>메모</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info">
+    <h3>⑦ 플랫 구조 (A + B)</h3>
+    <p><b>중첩 탭 제거.</b> 바텀탭(기록) → 본문. 끝. 서브탭(쓰기/달력)도, 상단 chip도 사라짐.</p>
+    <ul>
+      <li><b>달력 = 시트 모달</b>: 날짜 네비 우측 ▦ 아이콘 → 아래에서 올라오는 시트. 선택하면 닫히며 이동. (사용 빈도 낮은 회고 도구의 제자리)</li>
+      <li><b>고양이 = 필터</b>: 오른쪽 상단 작은 pill ("고양이: 전체 ▼"). 탭으로 보이지 않음. 다묘 가정의 "지금은 이 녀석만" 니즈만 선택적 충족.</li>
+      <li><b>기본은 카드 스택</b>: 전체 요약 → 나비 / 치즈 / 루나 아코디언 카드. 첫 카드만 펼침, 탭해서 확장/수축.</li>
+    </ul>
+    <div class="pros"><b>장점</b> — 인지 부담 최저. "어디에 있지?" 없음. 하루 한 곳에서 모든 입력.</div>
+    <div class="cons"><b>주의</b> — 달력이 "가려진 기능"이라 신규 유저가 못 찾을 수 있음. 첫 사용 시 툴팁/코치마크로 달력 위치 안내 필요.</div>
+    <p style="margin-top:12px;color:var(--muted);font-size:12px">
+      ※ 우측 상단 <b>▦</b> 아이콘으로 달력 시트를 열어보세요. 필터 pill도 드롭다운 됩니다.
+    </p>
+  </div>
+</section>
+
+<!-- ───────── ⑧ 메모만 (미니멀) ───────── -->
+<section class="stage pane" id="opt8">
+  <div class="frame" style="position:relative">
+    <div class="frame-head"><h2>기록</h2><p>프리셋 없음 · 자유 메모 하나만</p></div>
+
+    <div class="body" style="position:relative">
+      <!-- 상단: 날짜 + 달력 아이콘 -->
+      <div class="top-bar">
+        <div class="date-pill">
+          <span class="arrow">‹</span>
+          <span class="date">4월 24일 (금) · 오늘</span>
+          <span class="arrow">›</span>
+        </div>
+        <button class="cal-icon" id="opt8-cal-btn" title="달력 열기">▦</button>
+      </div>
+
+      <!-- 입력 박스 -->
+      <div class="write-box">
+        <div class="tag-row" id="opt8-tags">
+          <button class="tag on" data-cat="all">전체</button>
+          <button class="tag" data-cat="nabi">나비</button>
+          <button class="tag" data-cat="cheese">치즈</button>
+          <button class="tag" data-cat="luna">루나</button>
+        </div>
+        <textarea id="opt8-ta" placeholder="오늘 있었던 일을 자유롭게 적어보세요.&#10;예: 나비 사료 평소보다 적게 먹음, 치즈 화장실 두 번"></textarea>
+        <div class="write-foot">
+          <span class="hint">태그 선택 후 저장</span>
+          <button class="save-btn" id="opt8-save" disabled>저장</button>
+        </div>
+      </div>
+
+      <!-- 지난 기록 피드 -->
+      <div class="feed-group">
+        <h4>오늘</h4>
+        <div class="feed-item">
+          <div class="fi-head">
+            <span class="fi-tag">나비</span>
+            <span class="fi-time">오전 9:12</span>
+          </div>
+          <div class="fi-text">사료 평소보다 적게 먹음. 물은 잘 마심.</div>
+        </div>
+      </div>
+
+      <div class="feed-group">
+        <h4>어제 · 4월 23일 (목)</h4>
+        <div class="feed-item">
+          <div class="fi-head">
+            <span class="fi-tag">전체</span>
+            <span class="fi-time">오후 8:20</span>
+          </div>
+          <div class="fi-text">저녁 사료 후 다들 활발함. 놀이 15분 정도.</div>
+        </div>
+        <div class="feed-item">
+          <div class="fi-head">
+            <span class="fi-tag">치즈</span>
+            <span class="fi-time">오후 2:40</span>
+          </div>
+          <div class="fi-text">화장실 두 번 감. 변 상태 정상.</div>
+        </div>
+      </div>
+
+      <div class="feed-group">
+        <h4>4월 22일 (수)</h4>
+        <div class="feed-item">
+          <div class="fi-head">
+            <span class="fi-tag">루나</span>
+            <span class="fi-time">오후 7:05</span>
+          </div>
+          <div class="fi-text">몸무게 5.1kg. 지난주보다 100g 증가.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 달력 시트 -->
+    <div class="sheet-overlay" id="opt8-sheet">
+      <div class="sheet">
+        <div class="handle"></div>
+        <div class="sheet-head">
+          <b>달력에서 날짜 선택</b>
+          <button class="close" id="opt8-sheet-close">×</button>
+        </div>
+        <div class="calendar" style="padding:12px">
+          <div class="cal-head">
+            <b style="font-size:14px">2026년 4월</b>
+            <div class="nav"><span>‹</span><span>›</span></div>
+          </div>
+          <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+          <div class="days">
+            <div class="day muted">30</div>
+            <div class="day">1</div>
+            <div class="day">2<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">3</div>
+            <div class="day">4</div>
+            <div class="day">5<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">6</div>
+            <div class="day">7<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">8</div>
+            <div class="day">9</div>
+            <div class="day">10<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">11</div>
+            <div class="day">12</div>
+            <div class="day">13</div>
+            <div class="day">14</div>
+            <div class="day">15<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">16</div>
+            <div class="day">17</div>
+            <div class="day">18</div>
+            <div class="day">19<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">20<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">21</div>
+            <div class="day">22<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">23<div class="dots"><i class="dot-memo"></i><i class="dot-memo"></i></div></div>
+            <div class="day selected">24<div class="dots"><i class="dot-memo"></i></div></div>
+            <div class="day">25</div><div class="day">26</div>
+            <div class="day">27</div><div class="day">28</div><div class="day">29</div>
+            <div class="day">30</div>
+          </div>
+          <div class="legend">
+            <span><i class="dot-memo"></i>메모 있음</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info">
+    <h3>⑧ 메모만 (미니멀)</h3>
+    <p><b>프리셋 제거.</b> "쓰기"는 진짜로 쓰기 하나. 태그 고르고 → 메모 쓰고 → 저장. 끝.</p>
+    <ul>
+      <li><b>입력창 하나</b> + 고양이 태그 pill. 저장 누르면 아래 피드에 바로 추가.</li>
+      <li><b>지난 기록은 날짜별 그룹으로 아래에 피드</b>. "어제 뭐 썼더라" 확인하며 오늘 기입.</li>
+      <li><b>달력은 시트 모달</b> — 메모 있는 날엔 점(▪) 표시. 탭하면 해당 날짜로 이동.</li>
+      <li><b>구조는 기존 <code>daily_logs</code> 그대로</b>. 새 테이블·마이그레이션 없음. v1 출시에 유리.</li>
+    </ul>
+    <div class="pros"><b>장점</b> — 마찰 최저. 개발 비용 거의 없음. 사용자가 "무엇을 쓸지" 자유롭게 정함.</div>
+    <div class="cons"><b>주의</b> — 구조화 분석(몸무게 그래프 등) 미래 불가능. 대신 v2에서 "이 메모에 몸무게 태그 달기" 같은 방식으로 점진 확장 가능.</div>
+    <p style="margin-top:12px;color:var(--muted);font-size:12px">
+      ※ textarea에 타이핑하면 저장 버튼 활성화 · <b>▦</b>로 달력 · 태그 클릭으로 고양이 선택.
+    </p>
+  </div>
+</section>
+
+<script>
+  const nav = document.querySelectorAll('.option-nav button');
+  const panes = document.querySelectorAll('.pane');
+  nav.forEach(b => b.addEventListener('click', () => {
+    nav.forEach(x => x.classList.remove('active'));
+    panes.forEach(p => p.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById(b.dataset.target).classList.add('active');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }));
+
+  // opt5 내부 탭 전환
+  const ftabs = document.querySelectorAll('#flow-tabs .tab');
+  const fw = document.getElementById('flow-write');
+  const fc = document.getElementById('flow-cal');
+  const fs = document.getElementById('flow-sub');
+  ftabs.forEach(t => t.addEventListener('click', () => {
+    ftabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    const isWrite = t.dataset.flow === 'write';
+    fw.style.display = isWrite ? 'block' : 'none';
+    fc.style.display = isWrite ? 'none'  : 'block';
+    fs.textContent = isWrite ? '쓰기 탭' : '달력 탭';
+  }));
+
+  // opt6 — chip 전환 + 카드 아코디언
+  const opt6 = document.getElementById('opt6');
+  const chips = opt6.querySelectorAll('#opt6-chips .chip');
+  const cards = opt6.querySelectorAll('[data-cat-card]');
+  const summary = document.getElementById('opt6-summary');
+
+  chips.forEach(c => c.addEventListener('click', () => {
+    chips.forEach(x => x.classList.remove('active'));
+    c.classList.add('active');
+    const cat = c.dataset.cat;
+    if (cat === 'all') {
+      summary.style.display = 'block';
+      cards.forEach((card, i) => {
+        card.style.display = 'block';
+        card.classList.toggle('open', i === 0);
+      });
+    } else {
+      summary.style.display = 'none';
+      cards.forEach(card => {
+        const match = card.dataset.catCard === cat;
+        card.style.display = match ? 'block' : 'none';
+        card.classList.toggle('open', match);
+      });
+    }
+  }));
+
+  cards.forEach(card => {
+    card.querySelector('.cat-card-head').addEventListener('click', () => {
+      card.classList.toggle('open');
+    });
+  });
+
+  // 세그먼트 버튼 시뮬레이션
+  opt6.querySelectorAll('.seg').forEach(seg => {
+    seg.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+      });
+    });
+  });
+
+  // 체크 필드 토글
+  opt6.querySelectorAll('.check-field').forEach(cf => {
+    cf.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cf.classList.toggle('on');
+    });
+  });
+
+  // opt7 — 달력 시트 + 필터 드롭다운 + 카드 아코디언
+  const opt7 = document.getElementById('opt7');
+  const o7sheet = document.getElementById('opt7-sheet');
+  document.getElementById('opt7-cal-btn').addEventListener('click', () => o7sheet.classList.add('open'));
+  document.getElementById('opt7-sheet-close').addEventListener('click', () => o7sheet.classList.remove('open'));
+  o7sheet.addEventListener('click', (e) => { if (e.target === o7sheet) o7sheet.classList.remove('open'); });
+  opt7.querySelectorAll('#opt7-sheet .day').forEach(d => {
+    d.addEventListener('click', () => o7sheet.classList.remove('open'));
+  });
+
+  const o7drop = document.getElementById('opt7-dropdown');
+  const o7label = document.getElementById('opt7-filter-label');
+  const o7summary = document.getElementById('opt7-summary');
+  const o7cards = opt7.querySelectorAll('[data-o7-card]');
+  const labels = { all: '전체', nabi: '나비', cheese: '치즈', luna: '루나' };
+
+  document.getElementById('opt7-filter-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    o7drop.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (!o7drop.contains(e.target)) o7drop.classList.remove('open');
+  });
+  o7drop.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    o7drop.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    const cat = b.dataset.cat;
+    o7label.textContent = labels[cat];
+    o7drop.classList.remove('open');
+    if (cat === 'all') {
+      o7summary.style.display = 'block';
+      o7cards.forEach((c, i) => {
+        c.style.display = 'block';
+        c.classList.toggle('open', i === 0);
+      });
+    } else {
+      o7summary.style.display = 'none';
+      o7cards.forEach(c => {
+        const match = c.dataset.o7Card === cat;
+        c.style.display = match ? 'block' : 'none';
+        c.classList.toggle('open', match);
+      });
+    }
+  }));
+
+  o7cards.forEach(card => {
+    card.querySelector('.cat-card-head').addEventListener('click', () => card.classList.toggle('open'));
+  });
+  opt7.querySelectorAll('.seg').forEach(seg => {
+    seg.querySelectorAll('button').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+    }));
+  });
+  opt7.querySelectorAll('.check-field').forEach(cf => {
+    cf.addEventListener('click', (e) => { e.stopPropagation(); cf.classList.toggle('on'); });
+  });
+
+  // opt8 — 태그 선택 + textarea + 달력 시트
+  const opt8 = document.getElementById('opt8');
+  const o8sheet = document.getElementById('opt8-sheet');
+  document.getElementById('opt8-cal-btn').addEventListener('click', () => o8sheet.classList.add('open'));
+  document.getElementById('opt8-sheet-close').addEventListener('click', () => o8sheet.classList.remove('open'));
+  o8sheet.addEventListener('click', (e) => { if (e.target === o8sheet) o8sheet.classList.remove('open'); });
+  opt8.querySelectorAll('#opt8-sheet .day').forEach(d => {
+    d.addEventListener('click', () => o8sheet.classList.remove('open'));
+  });
+
+  opt8.querySelectorAll('#opt8-tags .tag').forEach(t => {
+    t.addEventListener('click', () => {
+      opt8.querySelectorAll('#opt8-tags .tag').forEach(x => x.classList.remove('on'));
+      t.classList.add('on');
+    });
+  });
+
+  const o8ta = document.getElementById('opt8-ta');
+  const o8save = document.getElementById('opt8-save');
+  o8ta.addEventListener('input', () => {
+    o8save.disabled = o8ta.value.trim().length === 0;
+  });
+  o8save.addEventListener('click', () => {
+    o8save.textContent = '저장됨 ✓';
+    setTimeout(() => {
+      o8save.textContent = '저장';
+      o8ta.value = '';
+      o8save.disabled = true;
+    }, 1200);
+  });
+</script>
+
+</body>
+</html>

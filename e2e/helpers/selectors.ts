@@ -33,8 +33,16 @@ export const sel = {
   recipeFormDeleteButton: 'recipe-form-delete-button',
   recipeToggle: (recipeId: string) => `recipe-toggle-${recipeId}`,
 
-  // Home
-  homeLogButton: 'home-log-button',
+  // Records
+  recordsTabWrite: 'records-tab-write',
+  recordsTabCalendar: 'records-tab-calendar',
+  recordsDatePrev: 'records-date-prev',
+  recordsDateNext: 'records-date-next',
+  recordsChipAll: 'records-chip-all',
+  recordsChip: (catId: string) => `records-chip-${catId}`,
+  recordsCatCard: (catId: string) => `records-cat-card-${catId}`,
+  recordsCatHeader: (catId: string) => `records-cat-header-${catId}`,
+  recordsAddLog: (catId: string) => `records-add-log-${catId}`,
   logFormTextInput: 'log-form-text-input',
   logFormSaveButton: 'log-form-save-button',
 } as const;

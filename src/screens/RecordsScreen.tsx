@@ -1,5 +1,5 @@
 // src/screens/RecordsScreen.tsx
-// REQ-M08~M10, V4-02, V4-05, V5-03~04
+// REQ-V4-02, V5-03~04
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -7,10 +7,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
-import { EmptyState } from '../components/ui';
+import { BottomSheet, Button, Input, EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
-import { getLast30Days, toDateKey } from '../utils/date';
-import { getChecksForDateRange, getLogsForDateRange } from '../services/dbService';
+import { toDateKey, getLast30Days } from '../utils/date';
+import { getLogsForDateRange, upsertLog } from '../services/dbService';
+import type { DailyLog } from '../types';
 
 const TAG_OPTIONS = [
   { value: '#EF4444', label: '응급' },
@@ -21,136 +22,164 @@ const TAG_OPTIONS = [
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MONTHS_KR = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
 
-function shortDate(dateStr: string): string {
+function formatDateHeader(dateStr: string, today: string): string {
   const d = new Date(dateStr + 'T00:00:00');
-  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  const day = WEEKDAYS[d.getDay()];
+  if (dateStr === today) return `${d.getMonth() + 1}월 ${d.getDate()}일 (${day}) · 오늘`;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${day})`;
 }
 
-function formatDisplayDate(dateStr: string): string {
+function formatDisplayDateCal(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   const day = WEEKDAYS[d.getDay()];
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${day}요일`;
 }
 
+function prevDay(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() - 1);
+  return toDateKey(d);
+}
+function nextDay(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + 1);
+  return toDateKey(d);
+}
+function formatLogTime(iso?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h < 12 ? '오전' : '오후';
+  const hh = h % 12 || 12;
+  return `${ampm} ${hh}:${String(m).padStart(2, '0')}`;
+}
+
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
-
 function getFirstDayOfWeek(year: number, month: number): number {
-  return new Date(year, month, 1).getDay(); // 0 = Sunday
+  return new Date(year, month, 1).getDay();
 }
-
 function toCalKey(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 export default function RecordsScreen() {
-  const { cats, recipes, checks, logs, household } = useStore();
-  const [activeTab, setActiveTab] = useState<'records' | 'posts'>('records');
-  const [selectedCatFilter, setSelectedCatFilter] = useState<string | null>(null);
+  const { cats, logs, household, user, setLogs } = useStore();
 
-  // 과거 30일 체크 기록 (DB에서 직접 로드)
-  const [historyChecks, setHistoryChecks] = useState<import('../types').CheckRecord[]>([]);
-  const [historyLogs, setHistoryLogs] = useState<import('../types').DailyLog[]>([]);
+  const today = toDateKey();
+  const [activeTab, setActiveTab] = useState<'write' | 'calendar'>('write');
+  const [viewDate, setViewDate] = useState<string>(today);
+  const [activeCatFilter, setActiveCatFilter] = useState<string | null>(null);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+
+  const [historyLogs, setHistoryLogs] = useState<DailyLog[]>([]);
   useEffect(() => {
     if (!household?.id) return;
-    const startDate = getLast30Days()[0];
-    getChecksForDateRange(household.id, startDate, today)
-      .then(setHistoryChecks)
-      .catch(() => {});
-    getLogsForDateRange(household.id, startDate, today)
-      .then(setHistoryLogs)
-      .catch(() => {});
-  }, [household?.id]);
+    const days = getLast30Days();
+    getLogsForDateRange(household.id, days[0], today).then(setHistoryLogs).catch(() => {});
+  }, [household?.id, today]);
 
-  // 과거 기록 + 오늘 실시간 데이터 병합
-  const allChecks = useMemo(() => {
-    const map: Record<string, import('../types').CheckRecord> = {};
-    historyChecks.forEach((c) => { map[c.id] = c; });
-    Object.values(checks).forEach((c) => { if (c) map[c.id] = c; });
-    return map;
-  }, [historyChecks, checks]);
-
-  // 전체 로그 (DB 과거 + store 오늘) 병합
   const allLogs = useMemo(() => {
-    const map: Record<string, import('../types').DailyLog> = {};
+    const map: Record<string, DailyLog> = {};
     historyLogs.forEach((l) => { map[l.id] = l; });
     logs.forEach((l) => { map[l.id] = l; });
     return Object.values(map);
   }, [historyLogs, logs]);
 
-  // Posts calendar state
+  const dayLogs = useMemo(
+    () => allLogs.filter((l) => l.date === viewDate),
+    [allLogs, viewDate]
+  );
+
+  // 필터 변경/고양이 로드 시 전체 모드에서 첫 카드 펼침 기본
+  useEffect(() => {
+    if (activeCatFilter === null) {
+      setExpandedCats(cats.length > 0 ? new Set([cats[0].id]) : new Set());
+    }
+  }, [activeCatFilter, cats.length]);
+
+  const toggleCard = (catId: string) => {
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(catId)) next.delete(catId);
+      else next.add(catId);
+      return next;
+    });
+  };
+
+  const canGoNext = viewDate < today;
+  const goPrev = () => setViewDate(prevDay(viewDate));
+  const goNext = () => { if (canGoNext) setViewDate(nextDay(viewDate)); };
+
+  // Memo BottomSheet state
+  const [logModalVisible, setLogModalVisible] = useState(false);
+  const [logText, setLogText] = useState('');
+  const [logTagColor, setLogTagColor] = useState<string | null>(null);
+  const [logCatId, setLogCatId] = useState<string | null>(null);
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+
+  const openAddLog = (catId: string | null) => {
+    setEditingLogId(null);
+    setLogText('');
+    setLogTagColor(null);
+    setLogCatId(catId);
+    setLogModalVisible(true);
+  };
+  const openEditLog = (log: DailyLog) => {
+    setEditingLogId(log.id);
+    setLogText(log.text);
+    setLogTagColor(log.tagColor ?? null);
+    setLogCatId(log.catId ?? null);
+    setLogModalVisible(true);
+  };
+  const handleSaveLog = async () => {
+    if (!logText.trim() || !household || !user) return;
+    const existing = editingLogId ? allLogs.find((l) => l.id === editingLogId) : null;
+    const log: DailyLog = {
+      id: existing?.id ?? crypto.randomUUID(),
+      date: viewDate,
+      text: logText.trim(),
+      tagColor: logTagColor ?? undefined,
+      catId: logCatId ?? undefined,
+      householdId: household.id,
+      authorId: user.uid,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      await upsertLog(household.id, log);
+      setLogs(existing
+        ? logs.map((l) => l.id === log.id ? log : l)
+        : [...logs, log]);
+      // historyLogs에도 반영 — 방금 쓴 메모가 즉시 보이도록
+      setHistoryLogs((prev) => {
+        const map: Record<string, DailyLog> = {};
+        prev.forEach((l) => { map[l.id] = l; });
+        map[log.id] = log;
+        return Object.values(map);
+      });
+      setLogModalVisible(false);
+      setEditingLogId(null);
+    } catch (e: any) {
+      if (typeof window !== 'undefined') window.alert(`저장 실패: ${e?.message ?? ''}`);
+    }
+  };
+
+  const visibleCats = activeCatFilter === null ? cats : cats.filter((c) => c.id === activeCatFilter);
+  const commonLogs = dayLogs.filter((l) => !l.catId);
+
+  // Calendar state (preserved)
   const nowDate = new Date();
   const [calYear, setCalYear] = useState(nowDate.getFullYear());
-  const [calMonth, setCalMonth] = useState(nowDate.getMonth()); // 0-indexed
+  const [calMonth, setCalMonth] = useState(nowDate.getMonth());
   const [selectedCalDate, setSelectedCalDate] = useState<string | null>(null);
-
-  const today = toDateKey();
-
-  // 예외 중심: 미완료 루틴이 있거나 메모가 있는 날짜만
-  const issueDates = useMemo(() => {
-    const last30 = getLast30Days();
-    return last30.filter((date) => {
-      // 이 날짜에 메모가 있는지
-      const hasLog = allLogs.some((l) => {
-        if (l.date !== date) return false;
-        if (selectedCatFilter && l.catId && l.catId !== selectedCatFilter) return false;
-        return true;
-      });
-      if (hasLog) return true;
-      // 이 날짜에 미완료 루틴이 있는지 (스케줄된 루틴 중 체크 없거나 done=false)
-      const d = new Date(date + 'T00:00:00');
-      const dayOfWeek = d.getDay();
-      const activeR = recipes.filter((r) => {
-        if (!r.active) return false;
-        if (selectedCatFilter && !r.catIds.includes(selectedCatFilter)) return false;
-        return r.days.length === 0 || r.days.includes(dayOfWeek);
-      });
-      return activeR.some((r) =>
-        !r.catIds.some((catId) =>
-          r.times.some((t) => allChecks[`${date}_${r.id}_${catId}_${t}`]?.done)
-        )
-      );
-    }).sort((a, b) => b.localeCompare(a));
-  }, [allChecks, allLogs, recipes, selectedCatFilter]);
-
-  // 타임라인 아이템: 오늘은 항상 표시 + 이슈 날짜 + 사이 이슈없음 묶음
-  type TLItem =
-    | { type: 'issue'; date: string }
-    | { type: 'clean'; dates: string[] };
-
-  const timelineItems = useMemo<TLItem[]>(() => {
-    const issueSet = new Set(issueDates);
-    issueSet.add(today); // 오늘은 항상 표시
-    const last30 = [...getLast30Days()].reverse(); // 최신순
-    const items: TLItem[] = [];
-    let cleanBuf: string[] = [];
-    for (const date of last30) {
-      if (issueSet.has(date)) {
-        if (cleanBuf.length > 0) {
-          items.push({ type: 'clean', dates: cleanBuf });
-          cleanBuf = [];
-        }
-        items.push({ type: 'issue', date });
-      } else {
-        cleanBuf.push(date);
-      }
-    }
-    if (cleanBuf.length > 0) items.push({ type: 'clean', dates: cleanBuf });
-    return items;
-  }, [issueDates, today]);
-
-  // Logs indexed by date (multiple per day) — for calendar
   const logsByDate = useMemo(() => {
-    const map: Record<string, typeof allLogs> = {};
-    allLogs.forEach((l) => {
-      if (!map[l.date]) map[l.date] = [];
-      map[l.date].push(l);
-    });
+    const map: Record<string, DailyLog[]> = {};
+    allLogs.forEach((l) => { if (!map[l.date]) map[l.date] = []; map[l.date].push(l); });
     return map;
   }, [allLogs]);
-
-  // Calendar cells for current month
   const calendarCells = useMemo(() => {
     const daysInMonth = getDaysInMonth(calYear, calMonth);
     const firstDay = getFirstDayOfWeek(calYear, calMonth);
@@ -159,168 +188,215 @@ export default function RecordsScreen() {
     for (let d = 1; d <= daysInMonth; d++) cells.push(d);
     return cells;
   }, [calYear, calMonth]);
-
   const prevCalMonth = () => {
     setSelectedCalDate(null);
     if (calMonth === 0) { setCalMonth(11); setCalYear((y) => y - 1); }
     else setCalMonth((m) => m - 1);
   };
-
   const nextCalMonth = () => {
     setSelectedCalDate(null);
     if (calMonth === 11) { setCalMonth(0); setCalYear((y) => y + 1); }
     else setCalMonth((m) => m + 1);
   };
-
   const selectedLogs = selectedCalDate ? (logsByDate[selectedCalDate] ?? []) : [];
+
+  // 달력 날짜 → 쓰기 탭으로 점프
+  const jumpToWrite = (dateKey: string) => {
+    setViewDate(dateKey);
+    setActiveCatFilter(null);
+    setActiveTab('write');
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>기록 보기</Text>
+        <Text style={styles.headerTitle}>기록</Text>
       </View>
 
-      {/* Tab bar */}
+      {/* Sub-tabs */}
       <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'records' && styles.tabActive]}
-          onPress={() => setActiveTab('records')}
+          testID="records-tab-write"
+          style={[styles.tab, activeTab === 'write' && styles.tabActive]}
+          onPress={() => setActiveTab('write')}
         >
-          <Text style={[styles.tabText, activeTab === 'records' && styles.tabTextActive]}>기록</Text>
+          <Text style={[styles.tabText, activeTab === 'write' && styles.tabTextActive]}>쓰기</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
-          onPress={() => setActiveTab('posts')}
+          testID="records-tab-calendar"
+          style={[styles.tab, activeTab === 'calendar' && styles.tabActive]}
+          onPress={() => setActiveTab('calendar')}
         >
-          <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>달력</Text>
+          <Text style={[styles.tabText, activeTab === 'calendar' && styles.tabTextActive]}>달력</Text>
         </TouchableOpacity>
       </View>
 
-      {activeTab === 'records' ? (
+      {activeTab === 'write' ? (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-          {/* Cat filter chips */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity
-                style={[styles.filterChip, selectedCatFilter === null && styles.filterChipSel]}
-                onPress={() => setSelectedCatFilter(null)}
-              >
-                <Text style={[styles.filterChipText, selectedCatFilter === null && styles.filterChipTextSel]}>전체</Text>
-              </TouchableOpacity>
-              {cats.map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.filterChip, selectedCatFilter === c.id && styles.filterChipSel]}
-                  onPress={() => setSelectedCatFilter(c.id)}
-                >
-                  <Text style={[styles.filterChipText, selectedCatFilter === c.id && styles.filterChipTextSel]}>
-                    {c.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-
-          {issueDates.length === 0 && (
+          {cats.length === 0 ? (
             <EmptyState
-              emoji="✓"
-              title="최근 30일 이슈 없음"
-              desc="미완료 루틴이나 메모가 없어요."
+              title="고양이를 먼저 등록해주세요"
+              desc="고양이 탭에서 첫 고양이를 등록한 뒤 메모를 작성할 수 있어요"
             />
-          )}
+          ) : (
+            <>
+              {/* Date nav */}
+              <View style={styles.dateNav}>
+                <TouchableOpacity style={styles.dateArrow} onPress={goPrev} testID="records-date-prev">
+                  <Text style={styles.dateArrowText}>‹</Text>
+                </TouchableOpacity>
+                <Text style={styles.dateLabel}>{formatDateHeader(viewDate, today)}</Text>
+                <TouchableOpacity
+                  style={[styles.dateArrow, !canGoNext && { opacity: 0.3 }]}
+                  onPress={goNext}
+                  disabled={!canGoNext}
+                  testID="records-date-next"
+                >
+                  <Text style={styles.dateArrowText}>›</Text>
+                </TouchableOpacity>
+              </View>
 
-          {timelineItems.map((item, idx) => {
-            if (item.type === 'clean') {
-              const { dates } = item;
-              const label = dates.length === 1
-                ? shortDate(dates[0])
-                : `${shortDate(dates[dates.length - 1])} ~ ${shortDate(dates[0])}`;
-              return (
-                <View key={`clean-${idx}`} style={styles.cleanRow}>
-                  <Text style={styles.cleanText}>{label}</Text>
-                  <Text style={styles.cleanMark}>이슈 없음 ✓</Text>
-                </View>
-              );
-            }
-
-            const { date } = item;
-            const d = new Date(date + 'T00:00:00');
-            const dayOfWeek = d.getDay();
-
-            const dayLogs = allLogs.filter((l) => {
-              if (l.date !== date) return false;
-              if (selectedCatFilter && l.catId && l.catId !== selectedCatFilter) return false;
-              return true;
-            });
-
-            const missedItems: { recipeName: string; catName: string }[] = [];
-            recipes.forEach((r) => {
-              if (!r.active) return;
-              if (selectedCatFilter && !r.catIds.includes(selectedCatFilter)) return;
-              const scheduled = (r.days ?? []).length === 0 || (r.days ?? []).includes(dayOfWeek);
-              if (!scheduled) return;
-              r.catIds.forEach((catId) => {
-                if (selectedCatFilter && catId !== selectedCatFilter) return;
-                const done = r.times.some((t) => allChecks[`${date}_${r.id}_${catId}_${t}`]?.done);
-                if (!done) {
-                  missedItems.push({ recipeName: r.name, catName: cats.find((c) => c.id === catId)?.name ?? '' });
-                }
-              });
-            });
-
-            return (
-              <View key={date} style={[styles.logEntry, shadow.sm]}>
-                <View style={styles.logDateHeader}>
-                  <Text style={styles.logDateText}>{formatDisplayDate(date)}</Text>
-                  {date === today && (
-                    <View style={styles.todayBadge}><Text style={styles.todayBadgeText}>오늘</Text></View>
-                  )}
-                </View>
-                <View style={styles.logContent}>
-                  {dayLogs.length === 0 && missedItems.length === 0 && (
-                    <Text style={styles.cleanDayText}>이상없음</Text>
-                  )}
-                  {dayLogs.map((l) => {
-                    const tagLabel = TAG_OPTIONS.find((t) => t.value === l.tagColor)?.label ?? '';
-                    const logCat = l.catId ? cats.find((c) => c.id === l.catId) : null;
-                    return (
-                      <View key={l.id} style={styles.logMemoBlock}>
-                        <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', marginBottom: 2 }}>
-                          {l.tagColor && (
-                            <View style={[styles.logTagBadge, { backgroundColor: l.tagColor + '20', borderColor: l.tagColor }]}>
-                              <View style={[styles.logTagDot, { backgroundColor: l.tagColor }]} />
-                              <Text style={[styles.logTagText, { color: l.tagColor }]}>{tagLabel}</Text>
-                            </View>
-                          )}
-                          {logCat && (
-                            <View style={[styles.logTagBadge, { backgroundColor: (logCat.tagColor ?? colors.caramel) + '20', borderColor: logCat.tagColor ?? colors.caramel }]}>
-                              <View style={[styles.logTagDot, { backgroundColor: logCat.tagColor ?? colors.caramel }]} />
-                              <Text style={[styles.logTagText, { color: logCat.tagColor ?? colors.caramel }]}>{logCat.name}</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.logText}>{l.text}</Text>
-                      </View>
-                    );
-                  })}
-                  {missedItems.map((item, i) => (
-                    <View key={i} style={styles.missedItem}>
-                      <Text style={styles.missedMark}>✗</Text>
-                      <Text style={styles.missedText}>
-                        <Text style={styles.missedCat}>{item.catName}</Text>
-                        {'  '}{item.recipeName}
+              {/* Cat chips */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md, flexGrow: 0 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    testID="records-chip-all"
+                    style={[styles.chip, activeCatFilter === null && styles.chipActive]}
+                    onPress={() => setActiveCatFilter(null)}
+                  >
+                    <Text style={[styles.chipText, activeCatFilter === null && styles.chipTextActive]}>전체</Text>
+                  </TouchableOpacity>
+                  {cats.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      testID={`records-chip-${c.id}`}
+                      style={[styles.chip, activeCatFilter === c.id && styles.chipActive]}
+                      onPress={() => setActiveCatFilter(c.id)}
+                    >
+                      <Text style={[styles.chipText, activeCatFilter === c.id && styles.chipTextActive]}>
+                        {c.name}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
-              </View>
-            );
-          })}
+              </ScrollView>
+
+              {/* 전체 모드 요약 카드 */}
+              {activeCatFilter === null && (
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>
+                    {viewDate === today ? '오늘 전체 요약' : '이 날 전체 요약'}
+                  </Text>
+                  <Text style={styles.summaryValue}>메모 {dayLogs.length}개</Text>
+                </View>
+              )}
+
+              {/* Cat accordion cards */}
+              {visibleCats.map((cat) => {
+                const isOpen = activeCatFilter === cat.id || (activeCatFilter === null && expandedCats.has(cat.id));
+                const catLogs = dayLogs.filter((l) => l.catId === cat.id);
+                const tagColor = cat.tagColor ?? colors.caramel;
+
+                return (
+                  <View key={cat.id} style={styles.catCard} testID={`records-cat-card-${cat.id}`}>
+                    <TouchableOpacity
+                      style={styles.catCardHead}
+                      testID={`records-cat-header-${cat.id}`}
+                      onPress={() => {
+                        if (activeCatFilter === null) toggleCard(cat.id);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View style={[styles.catDot, { backgroundColor: tagColor }]} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.catName}>{cat.name}</Text>
+                          <Text style={[styles.catSum, catLogs.length === 0 && { color: colors.caramel }]}>
+                            {catLogs.length === 0 ? '메모 없음 · 탭해서 추가' : `메모 ${catLogs.length}개`}
+                          </Text>
+                        </View>
+                      </View>
+                      {activeCatFilter === null && (
+                        <Text style={[styles.chev, isOpen && styles.chevOpen]}>▾</Text>
+                      )}
+                    </TouchableOpacity>
+
+                    {isOpen && (
+                      <View style={styles.catCardBody}>
+                        {catLogs.map((log) => {
+                          const tagOption = log.tagColor ? TAG_OPTIONS.find((t) => t.value === log.tagColor) : null;
+                          return (
+                            <TouchableOpacity
+                              key={log.id}
+                              style={styles.memoItem}
+                              onPress={() => openEditLog(log)}
+                              activeOpacity={0.7}
+                            >
+                              <View style={styles.memoMeta}>
+                                <Text style={styles.memoTime}>{formatLogTime(log.createdAt)}</Text>
+                                {tagOption && (
+                                  <View style={[styles.tagBadge, { backgroundColor: tagOption.value + '20', borderColor: tagOption.value }]}>
+                                    <Text style={[styles.tagBadgeText, { color: tagOption.value }]}>{tagOption.label}</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={styles.memoText}>{log.text}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                        <Button
+                          testID={`records-add-log-${cat.id}`}
+                          label="+ 메모 추가"
+                          variant="secondary"
+                          size="sm"
+                          onPress={() => openAddLog(cat.id)}
+                          style={{ marginTop: catLogs.length === 0 ? 0 : 8 }}
+                        />
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+
+              {/* 공통 메모 — 전체 모드에서만, catId 없는 메모 모음 */}
+              {activeCatFilter === null && commonLogs.length > 0 && (
+                <View style={styles.catCard}>
+                  <View style={styles.catCardHead}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.catName}>공통 메모</Text>
+                      <Text style={styles.catSum}>고양이 지정 없음 · {commonLogs.length}개</Text>
+                    </View>
+                  </View>
+                  <View style={styles.catCardBody}>
+                    {commonLogs.map((log) => {
+                      const tagOption = log.tagColor ? TAG_OPTIONS.find((t) => t.value === log.tagColor) : null;
+                      return (
+                        <TouchableOpacity
+                          key={log.id}
+                          style={styles.memoItem}
+                          onPress={() => openEditLog(log)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.memoMeta}>
+                            <Text style={styles.memoTime}>{formatLogTime(log.createdAt)}</Text>
+                            {tagOption && (
+                              <View style={[styles.tagBadge, { backgroundColor: tagOption.value + '20', borderColor: tagOption.value }]}>
+                                <Text style={[styles.tagBadgeText, { color: tagOption.value }]}>{tagOption.label}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.memoText}>{log.text}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </>
+          )}
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
           {/* Month navigation */}
           <View style={styles.calHeader}>
             <TouchableOpacity style={styles.calNavBtn} onPress={prevCalMonth}>
@@ -332,7 +408,7 @@ export default function RecordsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Tag legend */}
+          {/* Legend */}
           <View style={styles.legendRow}>
             {TAG_OPTIONS.map((t) => (
               <View key={t.value} style={styles.legendItem}>
@@ -348,7 +424,6 @@ export default function RecordsScreen() {
 
           {/* Calendar grid */}
           <View style={styles.calGrid}>
-            {/* Weekday headers */}
             {WEEKDAYS.map((w, i) => (
               <View key={w} style={styles.calDayHeader}>
                 <Text style={[styles.calDayHeaderText, i === 0 && { color: '#EF4444' }, i === 6 && { color: '#3B82F6' }]}>
@@ -356,7 +431,6 @@ export default function RecordsScreen() {
                 </Text>
               </View>
             ))}
-            {/* Day cells */}
             {calendarCells.map((day, idx) => {
               if (day === null) {
                 return <View key={`empty-${idx}`} style={styles.calCell} />;
@@ -376,7 +450,7 @@ export default function RecordsScreen() {
                     isToday && styles.calCellToday,
                   ]}
                   onPress={() => setSelectedCalDate(isSelected ? null : dateKey)}
-                  activeOpacity={dateLogs.length > 0 ? 0.7 : 1}
+                  activeOpacity={0.7}
                 >
                   <Text style={[
                     styles.calDayNum,
@@ -398,11 +472,11 @@ export default function RecordsScreen() {
             })}
           </View>
 
-          {/* Selected day logs */}
+          {/* Selected day detail */}
           {selectedCalDate && (
             <View style={[styles.selectedLogCard, shadow.sm]}>
               <View style={styles.selectedLogHeader}>
-                <Text style={styles.selectedLogDate}>{formatDisplayDate(selectedCalDate)}</Text>
+                <Text style={styles.selectedLogDate}>{formatDisplayDateCal(selectedCalDate)}</Text>
               </View>
               {selectedLogs.length > 0 ? (
                 selectedLogs.map((log) => {
@@ -431,17 +505,95 @@ export default function RecordsScreen() {
               ) : (
                 <Text style={styles.selectedLogEmpty}>이 날의 메모가 없어요</Text>
               )}
+              <Button
+                label="이 날짜로 쓰기 열기"
+                variant="ghost"
+                size="sm"
+                onPress={() => jumpToWrite(selectedCalDate)}
+                style={{ marginTop: spacing.sm }}
+              />
             </View>
           )}
 
           {logs.length === 0 && (
             <EmptyState
-              title="아직 포스트가 없어요"
-              desc="홈 화면에서 오늘의 메모를 작성하면 여기에 표시돼요"
+              title="아직 메모가 없어요"
+              desc="쓰기 탭에서 오늘의 메모를 작성해보세요"
             />
           )}
         </ScrollView>
       )}
+
+      {/* Memo BottomSheet */}
+      <BottomSheet
+        visible={logModalVisible}
+        onClose={() => { setLogModalVisible(false); setEditingLogId(null); }}
+        title={editingLogId ? '메모 수정' : '메모 추가'}
+      >
+        {cats.length > 0 && (
+          <View style={styles.catSelectRow}>
+            <Text style={styles.tagLabel}>고양이</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <TouchableOpacity
+                  style={[styles.tagChip, logCatId === null && styles.tagChipSelected, { borderColor: colors.border }]}
+                  onPress={() => setLogCatId(null)}
+                >
+                  <Text style={[styles.tagChipText, logCatId === null && { color: colors.charcoal, fontWeight: '600' }]}>전체</Text>
+                </TouchableOpacity>
+                {cats.map((cat) => {
+                  const color = cat.tagColor ?? colors.caramel;
+                  const selected = logCatId === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.tagChip, { borderColor: color, backgroundColor: selected ? color : color + '18' }]}
+                      onPress={() => setLogCatId(selected ? null : cat.id)}
+                    >
+                      <Text style={[styles.tagChipText, { color: selected ? '#fff' : color }]}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+        <Input
+          testID="log-form-text-input"
+          label="메모"
+          value={logText}
+          onChangeText={setLogText}
+          multiline
+          numberOfLines={5}
+          placeholder="오늘 고양이의 상태, 특이사항 등을 기록해보세요"
+          containerStyle={{ marginBottom: spacing.md }}
+          style={{ minHeight: 120 }}
+        />
+        <View style={styles.tagRow}>
+          <Text style={styles.tagLabel}>상태</Text>
+          <View style={styles.tagOptions}>
+            <TouchableOpacity
+              style={[styles.tagChip, logTagColor === null && styles.tagChipSelected, { borderColor: colors.border }]}
+              onPress={() => setLogTagColor(null)}
+            >
+              <Text style={[styles.tagChipText, logTagColor === null && { color: colors.charcoal, fontWeight: '600' }]}>없음</Text>
+            </TouchableOpacity>
+            {TAG_OPTIONS.map((t) => (
+              <TouchableOpacity
+                key={t.value}
+                style={[styles.tagChip, { borderColor: t.value, backgroundColor: logTagColor === t.value ? t.value : t.value + '18' }]}
+                onPress={() => setLogTagColor(logTagColor === t.value ? null : t.value)}
+              >
+                <Text style={[styles.tagChipText, { color: logTagColor === t.value ? '#fff' : t.value }]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.md }}>
+          <Button label="취소" variant="secondary" onPress={() => setLogModalVisible(false)} style={{ flex: 1 }} />
+          <Button testID="log-form-save-button" label="저장" variant="primary" onPress={handleSaveLog} style={{ flex: 1 }} />
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
@@ -466,51 +618,75 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 14, color: colors.muted },
   tabTextActive: { color: colors.caramel, fontWeight: '600' },
   content: { padding: spacing.lg, paddingBottom: 80 },
-  filterChip: {
+
+  // Write mode
+  dateNav: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 4, marginBottom: spacing.md,
+  },
+  dateArrow: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: colors.cream,
+    borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  dateArrowText: { fontSize: 18, color: colors.brownMid, lineHeight: 20 },
+  dateLabel: { fontSize: 15, fontWeight: '600', color: colors.brownMid },
+  chip: {
     paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.full,
     backgroundColor: colors.cream, borderWidth: 1.5, borderColor: colors.border,
   },
-  filterChipSel: { backgroundColor: colors.caramel, borderColor: colors.caramel },
-  filterChipText: { fontSize: 13, color: colors.brownMid },
-  filterChipTextSel: { color: '#fff' },
-  logEntry: {
-    borderWidth: 1.5, borderColor: colors.border,
-    borderRadius: radius.md, backgroundColor: '#fff', marginBottom: 12, overflow: 'hidden',
+  chipActive: { backgroundColor: colors.caramel, borderColor: colors.caramel },
+  chipText: { fontSize: 13, color: colors.brownMid },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
+  summaryCard: {
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: colors.border,
+    borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md,
   },
-  logDateHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: colors.cream, paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
+  summaryLabel: { fontSize: 12, color: colors.muted, marginBottom: 4 },
+  summaryValue: { fontSize: 14, color: colors.charcoal, fontWeight: '600' },
+  catCard: {
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: colors.border,
+    borderRadius: radius.md, marginBottom: 10, overflow: 'hidden',
   },
-  logDateText: { fontSize: 13, color: colors.muted, flex: 1 },
-  todayBadge: {
-    backgroundColor: colors.caramel, paddingHorizontal: 10, paddingVertical: 2, borderRadius: radius.full,
+  catCardHead: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14, gap: 8,
   },
-  todayBadgeText: { fontSize: 11, color: '#fff' },
-  logContent: { padding: 14 },
-  logMemoBlock: { marginBottom: 10 },
-  missedItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingVertical: 4,
+  catDot: { width: 12, height: 12, borderRadius: 6 },
+  catName: { fontSize: 15, fontWeight: '600', color: colors.charcoal },
+  catSum: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  chev: { fontSize: 14, color: colors.muted, transform: [{ rotate: '0deg' }] },
+  chevOpen: { color: colors.brownMid, transform: [{ rotate: '180deg' }] },
+  catCardBody: {
+    paddingHorizontal: 16, paddingBottom: 14,
+    borderTopWidth: 1, borderTopColor: colors.border,
   },
-  missedMark: { fontSize: 14, color: '#EF4444', fontWeight: '700', width: 16 },
-  missedText: { fontSize: 13, color: colors.charcoal, flex: 1 },
-  missedCat: { color: colors.caramel, fontWeight: '600' },
-  logTagBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
-    borderWidth: 1, borderRadius: radius.full, paddingVertical: 3, paddingHorizontal: 8, marginBottom: 6,
+  memoItem: {
+    backgroundColor: colors.cream, borderRadius: radius.sm,
+    padding: 10, marginTop: 10,
   },
-  logTagDot: { width: 8, height: 8, borderRadius: 4 },
-  logTagText: { fontSize: 11, fontWeight: '600' },
-  logText: { fontSize: 14, color: colors.charcoal, lineHeight: 22 },
-  cleanDayText: { fontSize: 13, color: '#22C55E', fontWeight: '600' },
-  cleanRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10, paddingHorizontal: 4, marginBottom: 8,
+  memoMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  memoTime: { fontSize: 11, color: colors.muted },
+  tagBadge: {
+    paddingVertical: 2, paddingHorizontal: 8, borderRadius: radius.full,
+    borderWidth: 1,
   },
-  cleanText: { fontSize: 12, color: colors.muted },
-  cleanMark: { fontSize: 12, fontWeight: '700', color: '#22C55E' },
-  // Calendar styles
+  tagBadgeText: { fontSize: 11, fontWeight: '600' },
+  memoText: { fontSize: 14, color: colors.charcoal, lineHeight: 20 },
+
+  // BottomSheet chip styles
+  catSelectRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.md },
+  tagRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  tagLabel: { fontSize: 13, color: colors.muted, minWidth: 28 },
+  tagOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 },
+  tagChip: {
+    paddingVertical: 5, paddingHorizontal: 12, borderRadius: radius.full,
+    borderWidth: 1.5, backgroundColor: colors.cream,
+  },
+  tagChipSelected: { backgroundColor: colors.charcoal + '18' },
+  tagChipText: { fontSize: 12, color: colors.muted },
+
+  // Calendar styles (preserved)
   calHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: spacing.md,
@@ -522,8 +698,7 @@ const styles = StyleSheet.create({
   calNavText: { fontSize: 20, color: colors.brownMid, lineHeight: 24 },
   calMonthLabel: { fontSize: 16, fontWeight: '700', color: colors.charcoal },
   legendRow: {
-    flexDirection: 'row', gap: 12, marginBottom: spacing.md,
-    flexWrap: 'wrap',
+    flexDirection: 'row', gap: 12, marginBottom: spacing.md, flexWrap: 'wrap',
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 9, height: 9, borderRadius: 5 },
@@ -555,6 +730,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   selectedLogDate: { fontSize: 13, color: colors.brownMid, fontWeight: '600' },
+  logTagBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
+    borderWidth: 1, borderRadius: radius.full, paddingVertical: 3, paddingHorizontal: 8,
+  },
+  logTagDot: { width: 8, height: 8, borderRadius: 4 },
+  logTagText: { fontSize: 11, fontWeight: '600' },
   selectedLogText: { fontSize: 14, color: colors.charcoal, lineHeight: 22 },
   selectedLogEmpty: { fontSize: 13, color: colors.muted, textAlign: 'center', paddingVertical: 8 },
 });
