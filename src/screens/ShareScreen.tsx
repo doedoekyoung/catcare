@@ -11,12 +11,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import {
   shareGetData, shareGetChecks, shareUpsertCheck,
+  shareGetLogs, shareInsertLog,
 } from '../services/dbService';
+import { Button, Input, Card, BottomSheet } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import InAppBrowserBanner from '../components/InAppBrowserBanner';
 import { toDateKey, formatFullDate } from '../utils/date';
-import type { Cat, Recipe, CheckRecord, Household, TimeSlot } from '../types';
+import type { Cat, Recipe, CheckRecord, Household, TimeSlot, DailyLog } from '../types';
 import type { RootStackParamList } from '../types';
+
+const TAG_OPTIONS = [
+  { value: '#EF4444', label: '응급' },
+  { value: '#F97316', label: '위험' },
+  { value: '#EAB308', label: '주의' },
+  { value: '#22C55E', label: '안정' },
+];
+const MAX_LOGS = 5;
 
 type RouteProps = RouteProp<RootStackParamList, 'ShareLink'>;
 
@@ -35,7 +45,15 @@ export default function ShareScreen() {
   const [cats, setCats] = useState<Cat[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [checks, setChecks] = useState<Record<string, CheckRecord>>({});
+  const [logs, setLogs] = useState<DailyLog[]>([]);
   const [activeCatId, setActiveCatId] = useState<string | null>(null);
+
+  // 메모 작성 모달 상태 (펫시터는 추가만 가능, 수정·삭제 불가)
+  const [logModalVisible, setLogModalVisible] = useState(false);
+  const [logText, setLogText] = useState('');
+  const [logTagColor, setLogTagColor] = useState<string | null>(null);
+  const [logCatId, setLogCatId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const today = toDateKey();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -46,6 +64,12 @@ export default function ShareScreen() {
     const map: Record<string, CheckRecord> = {};
     list.forEach((c) => { map[c.id] = c; });
     setChecks(map);
+  }, [token, today]);
+
+  const loadLogs = useCallback(async () => {
+    if (!token) return;
+    const list = await shareGetLogs(token, today);
+    setLogs(list);
   }, [token, today]);
 
   const loadAll = useCallback(async () => {
@@ -59,7 +83,9 @@ export default function ShareScreen() {
     setCats(bundle.cats);
     setRecipes(bundle.recipes);
     await loadChecks();
-  }, [token, loadChecks]);
+    // 메모 RPC가 서버에 아직 없을 수 있음 — 실패해도 본 화면은 정상 노출
+    await loadLogs().catch(() => {});
+  }, [token, loadChecks, loadLogs]);
 
   useEffect(() => {
     (async () => {
@@ -73,18 +99,53 @@ export default function ShareScreen() {
     })();
   }, [loadAll]);
 
-  // 폴링: 펫시터가 화면을 열어두는 동안 다른 집사의 체크를 반영
+  // 폴링: 펫시터가 화면을 열어두는 동안 다른 집사의 체크·메모를 반영
   useEffect(() => {
     if (error || loading) return;
-    pollRef.current = setInterval(() => { loadChecks().catch(() => {}); }, POLL_INTERVAL_MS);
+    pollRef.current = setInterval(() => {
+      loadChecks().catch(() => {});
+      loadLogs().catch(() => {});
+    }, POLL_INTERVAL_MS);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [error, loading, loadChecks]);
+  }, [error, loading, loadChecks, loadLogs]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try { await loadChecks(); } catch {}
+    try { await Promise.all([loadChecks(), loadLogs()]); } catch {}
     setRefreshing(false);
-  }, [loadChecks]);
+  }, [loadChecks, loadLogs]);
+
+  const openLogModal = useCallback(() => {
+    setLogText('');
+    setLogTagColor(null);
+    setLogCatId(activeCatId);
+    setLogModalVisible(true);
+  }, [activeCatId]);
+
+  const handleSaveLog = useCallback(async () => {
+    const text = logText.trim();
+    if (!text || saving) return;
+    if (logs.length >= MAX_LOGS) {
+      if (typeof window !== 'undefined') window.alert(`메모는 하루 최대 ${MAX_LOGS}개까지 등록할 수 있습니다.`);
+      return;
+    }
+    setSaving(true);
+    try {
+      const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await shareInsertLog(token, {
+        id, date: today, catId: logCatId, text, tagColor: logTagColor,
+      });
+      await loadLogs();
+      setLogModalVisible(false);
+      setLogText('');
+    } catch (e: any) {
+      if (typeof window !== 'undefined') window.alert(`저장 실패: ${e?.message ?? ''}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [logText, saving, logs.length, token, today, logCatId, logTagColor, loadLogs]);
 
   const handleToggleCheck = useCallback(
     async (recipe: Recipe, catId: string, timeSlot: TimeSlot) => {
@@ -279,13 +340,134 @@ export default function ShareScreen() {
           </View>
         )}
 
+        {/* 메모 섹션 — 오늘 기록 조회 + 펫시터용 추가 */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>오늘의 메모</Text>
+            <View style={styles.sectionLine} />
+          </View>
+          {logs.length > 0 && logs.map((log) => {
+            const logCat = log.catId ? cats.find((c) => c.id === log.catId) : null;
+            return (
+              <Card key={log.id} style={{ marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                  {log.tagColor && (
+                    <View style={[styles.logTagBadge, { backgroundColor: log.tagColor + '20', borderColor: log.tagColor }]}>
+                      <View style={[styles.logTagDot, { backgroundColor: log.tagColor }]} />
+                      <Text style={[styles.logTagText, { color: log.tagColor }]}>
+                        {TAG_OPTIONS.find((t) => t.value === log.tagColor)?.label ?? ''}
+                      </Text>
+                    </View>
+                  )}
+                  {logCat && (
+                    <View style={[styles.logTagBadge, { backgroundColor: (logCat.tagColor ?? colors.caramel) + '20', borderColor: logCat.tagColor ?? colors.caramel }]}>
+                      <View style={[styles.logTagDot, { backgroundColor: logCat.tagColor ?? colors.caramel }]} />
+                      <Text style={[styles.logTagText, { color: logCat.tagColor ?? colors.caramel }]}>{logCat.name}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.logText}>{log.text}</Text>
+              </Card>
+            );
+          })}
+          {logs.length < MAX_LOGS ? (
+            <Button
+              testID="share-log-add-button"
+              label="+ 메모 추가"
+              variant="secondary"
+              size="sm"
+              onPress={openLogModal}
+              style={{ marginTop: 4 }}
+            />
+          ) : (
+            <Text style={styles.logLimitText}>오늘 메모가 가득 찼습니다 ({MAX_LOGS}/{MAX_LOGS})</Text>
+          )}
+        </View>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             이 화면은 공유 링크를 통해 접근한 펫시터 전용 뷰입니다.{'\n'}
-            체크 내역은 집사에게 전달됩니다.
+            체크·메모 내역은 집사에게 전달됩니다.
           </Text>
         </View>
       </ScrollView>
+
+      <BottomSheet
+        visible={logModalVisible}
+        onClose={() => setLogModalVisible(false)}
+        title="메모 추가"
+      >
+        {cats.length > 0 && (
+          <View style={styles.catSelectRow}>
+            <Text style={styles.tagLabel}>고양이</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <TouchableOpacity
+                  style={[styles.tagChip, { borderColor: colors.border }, logCatId === null && styles.tagChipSelected]}
+                  onPress={() => setLogCatId(null)}
+                >
+                  <Text style={[styles.tagChipText, logCatId === null && { color: colors.charcoal, fontWeight: '600' }]}>전체</Text>
+                </TouchableOpacity>
+                {cats.map((cat) => {
+                  const c = cat.tagColor ?? colors.caramel;
+                  const sel = logCatId === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.tagChip, { borderColor: c, backgroundColor: sel ? c : c + '18' }]}
+                      onPress={() => setLogCatId(sel ? null : cat.id)}
+                    >
+                      <Text style={[styles.tagChipText, { color: sel ? '#fff' : c }]}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+        <Input
+          testID="share-log-text-input"
+          label="특이사항 메모"
+          value={logText}
+          onChangeText={setLogText}
+          multiline
+          numberOfLines={5}
+          placeholder="오늘 고양이의 상태, 특이사항 등을 기록해보세요"
+          containerStyle={{ marginBottom: spacing.md }}
+          style={{ minHeight: 120 }}
+        />
+        <View style={styles.tagRow}>
+          <Text style={styles.tagLabel}>상태</Text>
+          <View style={styles.tagOptions}>
+            <TouchableOpacity
+              style={[styles.tagChip, { borderColor: colors.border }, logTagColor === null && styles.tagChipSelected]}
+              onPress={() => setLogTagColor(null)}
+            >
+              <Text style={[styles.tagChipText, logTagColor === null && { color: colors.charcoal, fontWeight: '600' }]}>없음</Text>
+            </TouchableOpacity>
+            {TAG_OPTIONS.map((t) => (
+              <TouchableOpacity
+                key={t.value}
+                style={[styles.tagChip, { borderColor: t.value, backgroundColor: logTagColor === t.value ? t.value : t.value + '18' }]}
+                onPress={() => setLogTagColor(logTagColor === t.value ? null : t.value)}
+              >
+                <Text style={[styles.tagChipText, { color: logTagColor === t.value ? '#fff' : t.value }]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.md }}>
+          <Button label="취소" variant="secondary" onPress={() => setLogModalVisible(false)} style={{ flex: 1 }} />
+          <Button
+            testID="share-log-save-button"
+            label={saving ? '저장 중...' : '저장'}
+            variant="primary"
+            onPress={handleSaveLog}
+            disabled={saving || !logText.trim()}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
@@ -359,4 +541,27 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#FFE082',
   },
   footerText: { fontSize: 12, color: colors.warnText, lineHeight: 20, textAlign: 'center' },
+  logTagBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: radius.full, borderWidth: 1,
+  },
+  logTagDot: { width: 6, height: 6, borderRadius: 3 },
+  logTagText: { fontSize: 11, fontWeight: '600' },
+  logText: { fontSize: 14, color: colors.charcoal, lineHeight: 22 },
+  logLimitText: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 8 },
+  catSelectRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginBottom: spacing.md,
+  },
+  tagLabel: { fontSize: 12, color: colors.muted, minWidth: 44 },
+  tagRow: { marginBottom: spacing.sm },
+  tagOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  tagChip: {
+    paddingVertical: 7, paddingHorizontal: 12,
+    borderRadius: radius.full, borderWidth: 1.5,
+    backgroundColor: colors.cream,
+  },
+  tagChipSelected: { backgroundColor: colors.warmWhite },
+  tagChipText: { fontSize: 12, color: colors.muted },
 });

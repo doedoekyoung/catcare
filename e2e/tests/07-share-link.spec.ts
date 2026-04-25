@@ -136,6 +136,49 @@ test.describe.serial('Share Link (펫시터 뷰)', () => {
     await ctx.close();
   });
 
+  test('공유 뷰에서 메모 작성 → DB 반영', async ({ browser }) => {
+    const { token, hhId } = await prepareShareContext();
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const today = new Date().toISOString().slice(0, 10);
+
+    // 깨끗한 상태에서 시작 (펫시터가 오늘 작성한 메모만 검증)
+    await admin.from('daily_logs').delete().eq('household_id', hhId).eq('date', today);
+
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.goto(`/share/${token}`);
+    await expect(page.getByText('펫시터 뷰')).toBeVisible({ timeout: 15_000 });
+
+    const addBtn = page.getByTestId('share-log-add-button');
+    await addBtn.waitFor({ timeout: 10_000 });
+    await addBtn.click();
+
+    const memoText = `펫시터 메모 ${Date.now()}`;
+    await page.getByTestId('share-log-text-input').fill(memoText);
+    await page.getByTestId('share-log-save-button').click();
+
+    // DB에 익명 메모로 저장됐는지 확인 (author_id NULL)
+    let inserted: any = null;
+    for (let i = 0; i < 10; i++) {
+      const { data } = await admin.from('daily_logs')
+        .select('*').eq('household_id', hhId).eq('date', today).eq('text', memoText);
+      if (data && data.length > 0) { inserted = data[0]; break; }
+      await page.waitForTimeout(500);
+    }
+    expect(inserted).not.toBeNull();
+    expect(inserted.text).toBe(memoText);
+    expect(inserted.author_id).toBeNull();
+
+    // 저장 후 화면에도 노출
+    await expect(page.getByText(memoText)).toBeVisible({ timeout: 10_000 });
+
+    // cleanup
+    await admin.from('daily_logs').delete().eq('household_id', hhId).eq('date', today);
+    await ctx.close();
+  });
+
   test('만료·잘못된 토큰 → 에러 메시지 노출', async ({ browser }) => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();

@@ -505,6 +505,28 @@ export async function shareUpsertCheck(token: string, check: CheckRecord): Promi
   if (error) throw error;
 }
 
+export async function shareGetLogs(token: string, date: string): Promise<DailyLog[]> {
+  const { data, error } = await supabase.rpc('share_get_logs', { p_token: token, p_date: date });
+  if (error) throw error;
+  return (data ?? []).map(toDailyLog);
+}
+
+export async function shareInsertLog(
+  token: string,
+  log: { id: string; date: string; catId?: string | null; text: string; tagColor?: string | null }
+): Promise<void> {
+  if (!throttleWrite(`shareInsertLog-${log.id}`, 500)) return;
+  const { error } = await supabase.rpc('share_insert_log', {
+    p_token: token,
+    p_id: log.id,
+    p_date: log.date,
+    p_cat_id: log.catId ?? null,
+    p_text: truncate(log.text, LIMITS.MAX_TEXT_LENGTH),
+    p_tag_color: log.tagColor ?? null,
+  });
+  if (error) throw error;
+}
+
 export async function getChecksForDateRange(
   householdId: string,
   startDate: string,
