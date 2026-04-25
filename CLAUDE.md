@@ -13,7 +13,8 @@ npm run ios              # iOS 시뮬레이터
 npm run android          # Android 에뮬레이터
 npm run test:platform    # 플랫폼 가드 검증 (grep) + 네이티브 마운트 스모크(jest-expo)
 npm run test             # 전체 jest 단위 테스트
-npm run test:e2e         # E2E 테스트 실행 (headless)
+npm run test:e2e         # 웹 E2E (Playwright)
+npm run test:android     # 안드로이드 E2E (Maestro + 로컬 에뮬레이터)
 npm run test:e2e:headed  # E2E 테스트 실행 (브라우저 표시)
 npm run test:e2e:ui      # Playwright UI 모드
 ```
@@ -60,6 +61,15 @@ if (typeof window !== 'undefined' && window.location) {
    - `scripts/check-platform-guards.sh` — `window.location` / `document.*` / `localStorage` 등 웹 전용 globals이 `Platform.OS` 가드 없이 사용되는지 grep 검증
    - `__tests__/App.platform.test.tsx` — App을 `Platform.OS = 'ios'/'android'/'web'` 각각에서 마운트해 throw 여부 확인 (jest-expo)
 2. 큰 네이티브 변경 시 추가로 — 최소 1회 `npm run android`/`npm run ios` 또는 EAS preview 빌드(APK)로 실 디바이스 첫 화면 진입 확인.
+
+### 안드로이드 E2E (Maestro)
+
+`maestro/flows/`의 YAML 플로우를 로컬 에뮬레이터에 실행. 기능 PR에 필수는 아니지만 출시 임박 시 핵심 사용자 흐름 회귀 방지에 유용.
+
+- 사전 조건: AVD `catcare`(arm64-v8a, RAM 1.5GB) + JAVA_HOME 17 + Maestro CLI. 새 셸에서 `~/.zshrc` 자동 로드.
+- 실행: `npm run test:android` — 에뮬레이터 부팅 → 모든 flow 순차 실행.
+- 사전에 디버그 APK가 에뮬레이터에 설치돼있어야 함 (`adb install -r ./catcare-debug.apk`).
+- 메모리: 평상시 0, 실행 중 ~1.5~2GB. Chrome 등 무거운 앱 정리 권장.
 
 ### EAS Build 시 주의
 

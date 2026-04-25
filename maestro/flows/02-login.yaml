@@ -1,0 +1,27 @@
+# 로그인 → 홈 진입까지 검증.
+# 환경변수 MAESTRO_EMAIL / MAESTRO_PASSWORD를 받음 (.env.test에서 export).
+appId: com.catcare.app
+env:
+  EMAIL: ""
+  PASSWORD: ""
+---
+- launchApp:
+    clearState: true
+# 첫 화면(AuthScreen) 렌더 대기 — clearState 후 RN 번들 평가가 약간 걸림
+- extendedWaitUntil:
+    visible:
+      id: "auth-email-input"
+    timeout: 30000
+- tapOn:
+    id: "auth-email-input"
+- inputText: ${EMAIL}
+- tapOn:
+    id: "auth-password-input"
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: "auth-submit-button"
+- extendedWaitUntil:
+    visible:
+      text: "오늘의 돌봄 루틴"
+    timeout: 30000

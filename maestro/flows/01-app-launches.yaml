@@ -1,0 +1,9 @@
+# 가장 기본 — 앱이 켜지고 첫 화면(로그인 또는 홈)이 노출되는지 확인.
+# 2026-04 안드로이드 첫 화면 크래시 같은 회귀를 잡는 1선 방어.
+appId: com.catcare.app
+---
+- launchApp:
+    clearState: false
+- assertVisible:
+    text: "CatCare"
+- takeScreenshot: launch
