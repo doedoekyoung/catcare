@@ -40,7 +40,7 @@ export function detectInAppBrowser(): InAppBrowserInfo {
 // Android: Chrome intent URI로 직접 실행 가능 (인앱에 따라 동작 여부 다름)
 // iOS: 범용 방법 없음 → URL 복사 + 안내
 export function openInExternalBrowser(url: string, info: InAppBrowserInfo): void {
-  if (typeof window === 'undefined') return;
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
   // 네이버 인앱은 전용 스킴 지원
   if (info.name === '네이버') {

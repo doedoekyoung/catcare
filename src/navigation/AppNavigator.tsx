@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { Text, View, TouchableOpacity } from 'react-native';
+import { Text, View, TouchableOpacity, Platform } from 'react-native';
 import { clearLocalSession } from '../services/authService';
 
 import Logo from '../components/Logo';
@@ -61,7 +61,8 @@ function MainTabs() {
 
 // 현재 URL이 공유 링크 경로(/share/:token)인지 판별. 웹 전용.
 function getShareTokenFromPath(): string | null {
-  if (typeof window === 'undefined') return null;
+  if (Platform.OS !== 'web') return null;
+  if (typeof window === 'undefined' || !window.location) return null;
   const m = window.location.pathname.match(/^\/share\/([^/?#]+)/);
   return m ? decodeURIComponent(m[1]) : null;
 }
@@ -169,7 +170,9 @@ export default function AppNavigator() {
             }}
             onPress={async () => {
               await clearLocalSession();
-              if (typeof window !== 'undefined') window.location.reload();
+              if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+                window.location.reload();
+              }
             }}
           >
             <Text style={{ color: colors.caramel, fontSize: 14 }}>로그인 문제 해결</Text>

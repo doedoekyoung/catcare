@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#FAF6F0"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.catcare.app",
@@ -30,11 +32,12 @@
       "package": "com.catcare.app",
       "versionCode": 1,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -59,8 +62,9 @@
     "scheme": "catcare",
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "418bff92-9284-4c73-86b0-bed7d7ca821d"
       }
-    }
+    },
+    "owner": "doedoe"
   }
 }
