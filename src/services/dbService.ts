@@ -132,49 +132,28 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   return data ? toUser(data) : null;
 }
 
-// 집사 추가: household.member_ids에 추가 + 상대방 household_id를 이 household로 변경
+// 집사 추가/제거 — RLS상 호스트가 다른 user 행을 직접 update할 수 없어 silent fail이 발생.
+// SECURITY DEFINER RPC로 households.member_ids + users.household_id를 한 번에 처리한다.
 export async function addMemberToHousehold(
   householdId: string,
   memberUid: string,
-  currentMemberIds: string[],
 ): Promise<void> {
-  const { error: hErr } = await supabase
-    .from(TABLES.HOUSEHOLDS)
-    .update({ member_ids: [...currentMemberIds, memberUid] })
-    .eq('id', householdId);
-  if (hErr) throw hErr;
-
-  const { error: uErr } = await supabase
-    .from(TABLES.USERS)
-    .update({ household_id: householdId })
-    .eq('uid', memberUid);
-  if (uErr) throw uErr;
+  const { error } = await supabase.rpc('add_household_member', {
+    p_household_id: householdId,
+    p_member_uid: memberUid,
+  });
+  if (error) throw error;
 }
 
-// 집사 제거: household.member_ids에서 삭제 + 상대방 household_id를 본인 소유 household로 복원
 export async function removeMemberFromHousehold(
   householdId: string,
   memberUid: string,
-  currentMemberIds: string[],
 ): Promise<void> {
-  const { error: hErr } = await supabase
-    .from(TABLES.HOUSEHOLDS)
-    .update({ member_ids: currentMemberIds.filter((id) => id !== memberUid) })
-    .eq('id', householdId);
-  if (hErr) throw hErr;
-
-  // 제거된 집사의 household_id를 본인이 owner인 household로 복원
-  const { data: ownHousehold } = await supabase
-    .from(TABLES.HOUSEHOLDS)
-    .select('id')
-    .eq('owner_id', memberUid)
-    .single();
-
-  const { error: uErr } = await supabase
-    .from(TABLES.USERS)
-    .update({ household_id: ownHousehold?.id ?? null })
-    .eq('uid', memberUid);
-  if (uErr) throw uErr;
+  const { error } = await supabase.rpc('remove_household_member', {
+    p_household_id: householdId,
+    p_member_uid: memberUid,
+  });
+  if (error) throw error;
 }
 
 // 여러 uid로 유저 목록 조회 (멤버 표시용)

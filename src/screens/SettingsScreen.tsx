@@ -89,7 +89,7 @@ export default function SettingsScreen() {
         webAlert('이미 추가됨', '이미 이 가구의 집사예요.');
         return;
       }
-      await addMemberToHousehold(household.id, found.uid, household.memberIds);
+      await addMemberToHousehold(household.id, found.uid);
       const newMemberIds = [...household.memberIds, found.uid];
       setHousehold({ ...household, memberIds: newMemberIds });
       setMembers((prev) => [...prev, found]);
@@ -110,7 +110,7 @@ export default function SettingsScreen() {
       `${member.displayName}님을 이 가구에서 제거할까요?`,
       async () => {
         try {
-          await removeMemberFromHousehold(household.id, member.uid, household.memberIds);
+          await removeMemberFromHousehold(household.id, member.uid);
           const newMemberIds = household.memberIds.filter((id) => id !== member.uid);
           setHousehold({ ...household, memberIds: newMemberIds });
           setMembers((prev) => prev.filter((m) => m.uid !== member.uid));
