@@ -95,15 +95,25 @@ export function subscribeToAuthState(
         return;
       }
       try {
-        const user = await getUserById(session.user.id);
+        // 일시적 fetch 실패/RLS 지연/신규가입 트리거 race를 흡수하기 위해 1회 재시도
+        let user = await getUserById(session.user.id);
+        if (!user) {
+          await new Promise((r) => setTimeout(r, 800));
+          user = await getUserById(session.user.id);
+        }
         if (user) {
           saveUserCache(user);
           cb(user);
         } else {
-          // DB에 유저 레코드 없음 → stale 세션으로 판단, 초기화
-          clearUserCache();
-          await supabase.auth.signOut({ scope: 'local' });
-          cb(null);
+          // 재시도해도 없음 → 우선 캐시로 버티고, 캐시도 없을 때만 stale 판정
+          const cached = readUserCache(session.user.id);
+          if (cached) {
+            cb(cached);
+          } else {
+            clearUserCache();
+            await supabase.auth.signOut({ scope: 'local' });
+            cb(null);
+          }
         }
       } catch (e: any) {
         // 인증 오류(401/JWT) → stale 토큰 자동 제거

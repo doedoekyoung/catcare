@@ -82,10 +82,11 @@ export default function AppNavigator() {
 
   useEffect(() => {
     if (shareToken) return; // 공유 뷰에서는 auth/데이터 구독 스킵
-    // 3초 후 초기화 버튼 노출, 5초 후 로컬 세션 자동 초기화 후 로그인 화면
+    // 3초 후 "로그인 문제 해결" 버튼 노출, 5초 후 로딩 화면 해제(세션은 보존).
+    // 5초 안에 onAuthStateChange가 오지 않아도 세션을 지우지 않는다 — 늦은 응답이
+    // 와도 setUser(...)로 자동 복구되도록. 진짜 stale 토큰은 "로그인 문제 해결" 버튼으로 처리.
     const resetTimer = setTimeout(() => setShowReset(true), 3000);
-    const fallback = setTimeout(async () => {
-      await clearLocalSession();
+    const fallback = setTimeout(() => {
       setAuthLoaded(true);
     }, 5000);
 
