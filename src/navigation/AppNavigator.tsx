@@ -82,13 +82,15 @@ export default function AppNavigator() {
 
   useEffect(() => {
     if (shareToken) return; // 공유 뷰에서는 auth/데이터 구독 스킵
-    // 3초 후 "로그인 문제 해결" 버튼 노출, 5초 후 로딩 화면 해제(세션은 보존).
-    // 5초 안에 onAuthStateChange가 오지 않아도 세션을 지우지 않는다 — 늦은 응답이
-    // 와도 setUser(...)로 자동 복구되도록. 진짜 stale 토큰은 "로그인 문제 해결" 버튼으로 처리.
+    // 3초 후 "로그인 문제 해결" 버튼 노출, 10초 후 stale 판정 + 로컬 세션 정리.
+    // 청소를 빼면 stale refresh token이 Supabase JS의 lock을 잡고 있어 새 로그인이
+    // 무한 hang하는 케이스가 있어 부활. 10초면 정상 응답(느린 네트워크 포함)은
+    // 대부분 도착하고, 그 안엔 getUserById 재시도(800ms x1)까지 흡수됨.
     const resetTimer = setTimeout(() => setShowReset(true), 3000);
-    const fallback = setTimeout(() => {
+    const fallback = setTimeout(async () => {
+      await clearLocalSession();
       setAuthLoaded(true);
-    }, 5000);
+    }, 10000);
 
     const unsubAuth = subscribeToAuthState(async (u) => {
       clearTimeout(resetTimer);
