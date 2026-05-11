@@ -77,6 +77,12 @@ if (typeof window !== 'undefined' && window.location) {
 - `EXPO_PUBLIC_*` 환경변수는 빌드 시 인라인되므로 EAS env에 등록 필요(`eas env:create --environment production`).
 - Supabase 마이그레이션 파일을 추가했으면 **EAS 빌드 전 서버 적용 필수** — 새 RPC가 없으면 native 앱이 catch 분기로 떨어져 동작 이상.
 
+### Supabase Auth — `auth.lock`을 in-memory로 고정 (2026-05)
+
+`src/services/supabase.ts`에서 `createClient`의 `auth.lock`을 **단일 탭 in-memory promise chain**으로 명시 지정한 상태. 기본값(`navigator.locks` 기반)은 새로고침 직후 stale refresh token 갱신이 무한 대기하면서 lock을 잡아둬서 **`onAuthStateChange`의 INITIAL_SESSION emit, `signOut`, 새 `signInWithPassword`까지 전부 hang**시키는 회귀가 있어 우회. multi-tab 동기화는 포기하는 trade-off (CatCare는 PWA형 단일 탭 사용이라 무영향).
+
+**다음에 비슷한 증상이 다시 보이면** — 새로고침 후 로딩 화면이 영원히 안 풀림 / 로그인 버튼 무한 hang / `clearLocalSession()`이 resolve 안 함 — **AppNavigator의 fallback timing이나 getUserById 재시도를 만지지 말 것**. 그건 다 증상이고 근본 원인은 lock. `supabase.ts`의 `lock` 옵션부터 의심하고, supabase-js 업그레이드 후라면 lock 시그니처 호환성도 확인할 것.
+
 ## E2E 테스트
 
 **코드 변경 후 반드시 `npm run test:e2e`를 실행하여 모든 테스트가 통과하는지 확인해야 한다.** 테스트가 실패하는 상태로 커밋하지 않는다.
