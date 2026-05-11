@@ -19,12 +19,29 @@ const authStorage =
         removeItem: (key: string) => AsyncStorage.removeItem(key),
       };
 
+// 단일 탭 안에서만 직렬화하는 가벼운 in-memory lock.
+// supabase-js 기본 lock은 navigator.locks 기반인데, 새로고침 직후 stale token
+// 갱신이 무한 대기하면서 lock을 잡아 onAuthStateChange / signOut / signIn 모두
+// hang시키는 회귀가 있어 교체. multi-tab 동기화는 포기하는 trade-off.
+const _memLocks = new Map<string, Promise<unknown>>();
+const memoryLock = async <R>(
+  name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>
+): Promise<R> => {
+  const prev = (_memLocks.get(name) ?? Promise.resolve()) as Promise<unknown>;
+  const next = prev.then(fn, fn);
+  _memLocks.set(name, next.catch(() => undefined));
+  return next as Promise<R>;
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    lock: memoryLock,
   },
 });
 
