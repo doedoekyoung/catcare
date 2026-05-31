@@ -240,22 +240,35 @@ export default function RecordsScreen() {
   // 달력에서 선택한 날의 checks (오늘이면 store, 과거면 일회성 fetch).
   // 과거 날짜 루틴 수정용 — 미래는 비활성화이므로 fetch 안 함.
   const [selectedDateChecks, setSelectedDateChecks] = useState<Record<string, CheckRecord>>({});
+  const [selectedDateLoading, setSelectedDateLoading] = useState(false);
+  // 편집 모드 buffer — pendingChecks는 토글 즉시 반영, 저장 클릭 시 일괄 upsert.
+  // originalChecks는 편집 진입 시점의 snapshot(원본). 두 map의 done 차이로 변경 항목 산출.
   const [showEditCheck, setShowEditCheck] = useState(false);
+  const [originalChecks, setOriginalChecks] = useState<Record<string, CheckRecord>>({});
+  const [pendingChecks, setPendingChecks] = useState<Record<string, CheckRecord>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
   useEffect(() => {
     setShowEditCheck(false);
-    if (!household?.id || !selectedCalDate) { setSelectedDateChecks({}); return; }
-    if (selectedCalDate === today) {
-      setSelectedDateChecks(todayChecks);
-      return;
+    setOriginalChecks({});
+    setPendingChecks({});
+    if (!household?.id || !selectedCalDate) {
+      setSelectedDateChecks({}); setSelectedDateLoading(false); return;
     }
-    if (selectedCalDate > today) { setSelectedDateChecks({}); return; }
+    if (selectedCalDate === today) {
+      setSelectedDateChecks(todayChecks); setSelectedDateLoading(false); return;
+    }
+    if (selectedCalDate > today) {
+      setSelectedDateChecks({}); setSelectedDateLoading(false); return;
+    }
+    setSelectedDateLoading(true);
     getChecksForDateRange(household.id, selectedCalDate, selectedCalDate)
       .then((arr) => {
         const map: Record<string, CheckRecord> = {};
         arr.forEach((c) => { map[c.id] = c; });
         setSelectedDateChecks(map);
       })
-      .catch(() => setSelectedDateChecks({}));
+      .catch(() => setSelectedDateChecks({}))
+      .finally(() => setSelectedDateLoading(false));
   }, [household?.id, selectedCalDate, today, todayChecks]);
 
   const selectedCatIdsForCheck = useMemo(
@@ -263,34 +276,77 @@ export default function RecordsScreen() {
     [activeCatFilter, cats]
   );
 
+  const pendingChangeKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const all = new Set([...Object.keys(pendingChecks), ...Object.keys(originalChecks)]);
+    all.forEach((k) => {
+      const orig = originalChecks[k]?.done ?? false;
+      const cur = pendingChecks[k]?.done ?? false;
+      if (orig !== cur) keys.add(k);
+    });
+    return keys;
+  }, [pendingChecks, originalChecks]);
+
+  const openEditMode = () => {
+    setOriginalChecks(selectedDateChecks);
+    setPendingChecks(selectedDateChecks);
+    setShowEditCheck(true);
+  };
+  const cancelEdit = () => {
+    setOriginalChecks({});
+    setPendingChecks({});
+    setShowEditCheck(false);
+  };
+  const saveEdit = async () => {
+    if (!household || pendingChangeKeys.size === 0) return;
+    setSavingEdit(true);
+    try {
+      const updates: CheckRecord[] = [];
+      pendingChangeKeys.forEach((k) => {
+        const rec = pendingChecks[k];
+        if (rec) updates.push(rec);
+      });
+      // 순차 실행 — throttleWrite는 key별이라 다른 key끼리는 동시 실행 가능하지만,
+      // 일괄 변경은 보통 N <= 수십이라 순차로 충분하고 디버깅이 쉬움.
+      for (const rec of updates) {
+        await upsertCheck(household.id, rec);
+      }
+      setSelectedDateChecks(pendingChecks);
+      // 미완료 카운트(missByDate)에 즉시 반영
+      setHistoryChecks((prev) => {
+        const map: Record<string, CheckRecord> = {};
+        prev.forEach((c) => { map[c.id] = c; });
+        updates.forEach((u) => { map[u.id] = u; });
+        return Object.values(map);
+      });
+      setOriginalChecks({});
+      setPendingChecks({});
+      setShowEditCheck(false);
+    } catch {
+      if (typeof window !== 'undefined') window.alert('저장에 실패했어요. 다시 시도해주세요.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const handlePastToggle = useCallback(
-    async (recipe: Recipe, catId: string, ts: TimeSlot) => {
+    (recipe: Recipe, catId: string, ts: TimeSlot) => {
       if (!household || !user || !selectedCalDate) return;
       const key = `${selectedCalDate}_${recipe.id}_${catId}_${ts}`;
-      const current = selectedDateChecks[key];
+      const current = pendingChecks[key];
       const newDone = !(current?.done ?? false);
       const record: CheckRecord = {
         id: key, date: selectedCalDate, recipeId: recipe.id, catId,
         done: newDone,
-        // 과거 보정 — 정확한 시각을 모르므로 doneAt은 비움 (오늘은 HomeScreen에서 new Date())
-        doneAt: selectedCalDate === today && newDone ? new Date().toISOString() : undefined,
+        // 과거 보정 — 정확한 시각을 모르므로 doneAt은 비움.
+        doneAt: undefined,
         doneBy: user.uid,
         householdId: household.id,
         memo: current?.memo,
       };
-      // 낙관 업데이트 — 화면 즉시 반영
-      setSelectedDateChecks((prev) => ({ ...prev, [key]: record }));
-      // 미완료 카운트(missByDate) 즉시 갱신을 위해 historyChecks에도 반영
-      setHistoryChecks((prev) => {
-        const idx = prev.findIndex((c) => c.id === key);
-        if (idx >= 0) {
-          const next = [...prev]; next[idx] = record; return next;
-        }
-        return [...prev, record];
-      });
-      try { await upsertCheck(household.id, record); } catch { /* 토스트 생략 — 낙관 UI 유지 */ }
+      setPendingChecks((prev) => ({ ...prev, [key]: record }));
     },
-    [household, user, selectedCalDate, selectedDateChecks, today]
+    [household, user, selectedCalDate, pendingChecks]
   );
   const toggleMissCat = (catId: string) => {
     setToggledMissCats((prev) => {
@@ -687,29 +743,47 @@ export default function RecordsScreen() {
                 </View>
               )}
 
-              {/* 과거/오늘 날짜 — 체크 수정 토글 */}
+              {/* 과거/오늘 날짜 — 체크 수정 편집 모드 (저장/취소) */}
               <View style={styles.editCheckWrap}>
-                <TouchableOpacity
-                  testID="records-cal-edit-toggle"
-                  style={styles.editCheckToggle}
-                  onPress={() => setShowEditCheck((v) => !v)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.editCheckToggleText}>
-                    {showEditCheck ? '✕ 체크 수정 닫기' : '✓ 이 날의 체크 수정'}
-                  </Text>
-                </TouchableOpacity>
-                {showEditCheck && (
-                  <View style={styles.editCheckBody} testID="records-cal-edit-body">
+                {!showEditCheck ? (
+                  <TouchableOpacity
+                    testID="records-cal-edit-toggle"
+                    style={[styles.editCheckToggle, selectedDateLoading && { opacity: 0.5 }]}
+                    onPress={openEditMode}
+                    disabled={selectedDateLoading}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.editCheckToggleText}>
+                      {selectedDateLoading ? '불러오는 중...' : '✓ 이 날의 체크 수정'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View testID="records-cal-edit-body">
                     <RoutineChecklist
                       date={selectedCalDate}
                       cats={cats}
                       recipes={recipes}
                       selectedCatIds={selectedCatIdsForCheck}
-                      checks={selectedDateChecks}
+                      checks={pendingChecks}
                       onToggle={handlePastToggle}
                       testIDPrefix="records-cal-check"
+                      highlightedKeys={pendingChangeKeys}
                     />
+                    <View style={styles.editCheckActions}>
+                      <Button
+                        label="취소"
+                        variant="ghost"
+                        onPress={cancelEdit}
+                        testID="records-cal-edit-cancel"
+                      />
+                      <Button
+                        label={pendingChangeKeys.size > 0 ? `저장 (${pendingChangeKeys.size}개 변경)` : '저장'}
+                        onPress={saveEdit}
+                        disabled={pendingChangeKeys.size === 0}
+                        loading={savingEdit}
+                        testID="records-cal-edit-save"
+                      />
+                    </View>
                   </View>
                 )}
               </View>
@@ -1055,5 +1129,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.caramel + '12',
   },
   editCheckToggleText: { fontSize: 12, fontWeight: '600', color: colors.caramel },
-  editCheckBody: { marginTop: spacing.md },
+  editCheckActions: {
+    flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm,
+    marginTop: spacing.md,
+  },
 });

@@ -1,5 +1,5 @@
-// 달력에서 어제 날짜 클릭 → 체크 수정 → DB 반영 + 새로고침 유지 확인.
-// 내일 날짜는 클릭 비활성화 검증.
+// 달력에서 과거 날짜 클릭 → 편집 모드(저장/취소) → DB 반영 검증.
+// 사전 준비는 admin client로 직접 insert (UI 등록 race 회피, 등록 자체는 02/03 spec에서 검증됨).
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { sel } from '../helpers/selectors';
@@ -17,54 +17,59 @@ function dateKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-test.describe.serial('Past Routine Edit', () => {
-  test('사전 준비: 고양이 + 루틴 등록', async ({ page }) => {
-    await ensureLoggedIn(page);
-    await page.getByText('고양이', { exact: true }).click();
+async function setupFixtures() {
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data: { users } } = await admin.auth.admin.listUsers();
+  const authUser = users.find((u) => u.email === TEST_EMAIL)!;
+  const { data: userData } = await admin
+    .from('users').select('household_id').eq('uid', authUser.id).single();
+  const householdId = userData!.household_id as string;
 
-    // 고양이 등록
-    await page.getByTestId(sel.catsAddButton).click();
-    await page.getByTestId(sel.catFormNameInput).fill(TEST_CAT.name);
-    await page.getByTestId(sel.catFormGenderMale).click();
-    await page.getByTestId(sel.catFormSaveButton).click();
-    await expect(page.getByTestId(sel.catFormSaveButton)).not.toBeVisible({ timeout: 15_000 });
+  const now = new Date().toISOString();
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    // 새로고침 후 루틴 등록
-    await page.reload();
-    await ensureLoggedIn(page);
-    await page.getByText('고양이', { exact: true }).click();
-    const expand = page.locator('[data-testid^="cats-expand-"]').first();
-    await expand.waitFor({ timeout: 10_000 });
-    await expand.click();
-    await page.getByText('+ 루틴 추가').click();
-    await page.getByTestId(sel.recipeFormNameInput).fill(TEST_RECIPE.name);
-    await page.getByTestId(sel.recipeFormSaveButton).click();
-    await expect(page.getByText('루틴 항목 등록')).not.toBeVisible({ timeout: 10_000 });
+  // 기존 fixture가 남아있을 수 있으니 먼저 정리
+  await admin.from('check_records').delete().eq('household_id', householdId);
+  await admin.from('recipes').delete().eq('household_id', householdId);
+  await admin.from('cats').delete().eq('household_id', householdId);
 
-    // 루틴 createdAt을 7일 전으로 밀어 어제도 적용 대상이 되도록.
-    // (앱 로직: date >= recipe.createdAt(YYYY-MM-DD)인 경우만 그 날 활성)
-    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false },
+  const { data: cat, error: catErr } = await admin
+    .from('cats')
+    .insert({
+      name: TEST_CAT.name, gender: 'male',
+      household_id: householdId, owner_id: authUser.id,
+      created_at: now, updated_at: now,
+    })
+    .select().single();
+  if (catErr) throw catErr;
+
+  const { error: recErr } = await admin
+    .from('recipes')
+    .insert({
+      name: TEST_RECIPE.name, time: 'morning', times: ['morning'],
+      days: [], cat_ids: [cat!.id], active: true,
+      household_id: householdId,
+      created_at: sevenDaysAgo.toISOString(), updated_at: now,
     });
-    const { data: { users } } = await admin.auth.admin.listUsers();
-    const authUser = users.find((u) => u.email === TEST_EMAIL)!;
-    const { data: userData } = await admin
-      .from('users').select('household_id').eq('uid', authUser.id).single();
-    const householdId = userData!.household_id as string;
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    await admin
-      .from('recipes')
-      .update({ created_at: sevenDaysAgo.toISOString() })
-      .eq('household_id', householdId);
+  if (recErr) throw recErr;
+}
+
+test.describe.serial('Past Routine Edit', () => {
+  test.beforeAll(async () => {
+    await setupFixtures();
   });
 
-  test('어제 날짜 → 체크 수정 → 새로고침 후 유지', async ({ page }) => {
+  test('어제 날짜 → 체크 토글 → 저장 → 새로고침 후 유지', async ({ page }) => {
     await ensureLoggedIn(page);
+    // cats 로드 wait — 비어있으면 홈 빈 메시지 표시
+    await expect(page.getByText('고양이를 등록해보세요')).not.toBeVisible({ timeout: 20_000 });
+    await page.locator('[data-testid^="home-check-"]').first().waitFor({ timeout: 15_000 });
     await page.getByText('기록', { exact: true }).click();
     await page.getByTestId(sel.recordsTabCalendar).click();
 
-    // 어제 dateKey 계산. 어제가 이전 달이면 prev month 한 번.
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yKey = dateKey(yesterday);
@@ -75,34 +80,67 @@ test.describe.serial('Past Routine Edit', () => {
     await expect(yesterdayCell).toBeVisible({ timeout: 5_000 });
     await yesterdayCell.click();
 
-    // 체크 수정 토글 펼치기
+    // fetch 완료(라벨 전환) 대기 후 편집 모드 진입
+    await expect(page.getByTestId(sel.recordsCalEditToggle)).toContainText('이 날의 체크 수정', { timeout: 5_000 });
     await page.getByTestId(sel.recordsCalEditToggle).click();
     await expect(page.getByTestId(sel.recordsCalEditBody)).toBeVisible();
 
-    // 첫 체크 항목 토글
     const firstCheck = page.locator('[data-testid^="records-cal-check-"]').first();
     await expect(firstCheck).toBeVisible({ timeout: 5_000 });
     await firstCheck.click();
 
-    // DB write 대기 후 새로고침
-    await page.waitForTimeout(800);
+    await expect(page.getByTestId(sel.recordsCalEditSave)).toContainText('1개 변경');
+    await page.getByTestId(sel.recordsCalEditSave).click();
+    await expect(page.getByTestId(sel.recordsCalEditToggle)).toBeVisible({ timeout: 5_000 });
+
+    // 새로고침 후 유지 — cats + recipes 둘 다 로드되어야 RoutineChecklist에 항목이 뜸
     await page.reload();
     await ensureLoggedIn(page);
+    await expect(page.getByText('고양이를 등록해보세요')).not.toBeVisible({ timeout: 20_000 });
+    await page.locator('[data-testid^="home-check-"]').first().waitFor({ timeout: 15_000 });
     await page.getByText('기록', { exact: true }).click();
     await page.getByTestId(sel.recordsTabCalendar).click();
-
     const yesterdayCell2 = page.getByTestId(sel.recordsCalDay(yKey));
     if (!(await yesterdayCell2.isVisible().catch(() => false))) {
       await page.getByTestId(sel.recordsCalPrevMonth).click();
     }
     await yesterdayCell2.click();
+    await expect(page.getByTestId(sel.recordsCalEditToggle)).toContainText('이 날의 체크 수정', { timeout: 5_000 });
     await page.getByTestId(sel.recordsCalEditToggle).click();
 
-    // 체크가 유지되어 있는지 — DOM 텍스트에 ✓ 마크 또는 done 상태 검증.
-    // 가장 단순한 검증: 첫 체크 항목 안에 ✓가 보이면 done.
     const firstCheck2 = page.locator('[data-testid^="records-cal-check-"]').first();
     await expect(firstCheck2).toBeVisible();
     await expect(firstCheck2.locator('text=✓')).toBeVisible({ timeout: 3_000 });
+  });
+
+  test('어제 날짜 → 체크 토글 → 취소 → DB 변경 없음', async ({ page }) => {
+    await ensureLoggedIn(page);
+    await expect(page.getByText('고양이를 등록해보세요')).not.toBeVisible({ timeout: 20_000 });
+    await page.getByText('기록', { exact: true }).click();
+    await page.getByTestId(sel.recordsTabCalendar).click();
+
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const tKey = dateKey(twoDaysAgo);
+    const cell = page.getByTestId(sel.recordsCalDay(tKey));
+    if (!(await cell.isVisible().catch(() => false))) {
+      await page.getByTestId(sel.recordsCalPrevMonth).click();
+    }
+    await expect(cell).toBeVisible({ timeout: 5_000 });
+    await cell.click();
+    await expect(page.getByTestId(sel.recordsCalEditToggle)).toContainText('이 날의 체크 수정', { timeout: 5_000 });
+    await page.getByTestId(sel.recordsCalEditToggle).click();
+
+    const firstCheck = page.locator('[data-testid^="records-cal-check-"]').first();
+    await firstCheck.click(); // pendingChecks에만 반영
+    await page.getByTestId(sel.recordsCalEditCancel).click();
+    await expect(page.getByTestId(sel.recordsCalEditToggle)).toBeVisible({ timeout: 5_000 });
+
+    // 다시 열어 체크가 원상복구(off)됐는지 확인
+    await page.getByTestId(sel.recordsCalEditToggle).click();
+    const firstCheck2 = page.locator('[data-testid^="records-cal-check-"]').first();
+    await expect(firstCheck2).toBeVisible();
+    await expect(firstCheck2.locator('text=✓')).not.toBeVisible({ timeout: 2_000 });
   });
 
   test('내일 날짜는 클릭 비활성화', async ({ page }) => {
@@ -119,8 +157,7 @@ test.describe.serial('Past Routine Edit', () => {
     }
     await expect(tomorrowCell).toBeVisible({ timeout: 5_000 });
 
-    // 클릭해도 selectedLogCard / editCheckToggle이 나타나지 않아야 함
-    await tomorrowCell.click({ force: true }); // disabled여도 force로 클릭 시도
+    await tomorrowCell.click({ force: true });
     await expect(page.getByTestId(sel.recordsCalEditToggle)).not.toBeVisible({ timeout: 1_500 });
   });
 });

@@ -52,5 +52,7 @@ export const sel = {
   recordsCalDay: (dateKey: string) => `records-cal-day-${dateKey}`,
   recordsCalEditToggle: 'records-cal-edit-toggle',
   recordsCalEditBody: 'records-cal-edit-body',
+  recordsCalEditSave: 'records-cal-edit-save',
+  recordsCalEditCancel: 'records-cal-edit-cancel',
   recordsCalCheck: (recipeId: string, slot: 'morning' | 'lunch' | 'evening') => `records-cal-check-${recipeId}-${slot}`,
 } as const;

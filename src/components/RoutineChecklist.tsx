@@ -21,12 +21,17 @@ export interface RoutineChecklistProps {
   onToggle: (recipe: Recipe, catId: string, timeSlot: TimeSlot) => void;
   testIDPrefix?: string;
   emptyMessage?: string;
+  /**
+   * 편집 모드에서 원본 대비 변경된 체크 key 집합. 해당 항목에 시각 강조 적용.
+   */
+  highlightedKeys?: Set<string>;
 }
 
 export function RoutineChecklist({
   date, cats, recipes, selectedCatIds, checks, onToggle,
   testIDPrefix = 'check',
   emptyMessage = '이 날에는 적용되는 루틴이 없어요',
+  highlightedKeys,
 }: RoutineChecklistProps) {
   const grouped = useMemo(() => {
     const dateOnly = date.slice(0, 10);
@@ -58,6 +63,7 @@ export function RoutineChecklist({
             {grouped[t].map(({ recipe, catId }) => {
               const key = `${date}_${recipe.id}_${catId}_${t}`;
               const isDone = checks[key]?.done ?? false;
+              const isChanged = highlightedKeys?.has(key) ?? false;
               const cat = cats.find((c) => c.id === catId);
               const tagColor = cat?.tagColor ?? colors.caramel;
               const sharedCatNames = recipe.catIds
@@ -73,6 +79,7 @@ export function RoutineChecklist({
                       ? { backgroundColor: tagColor + '18', borderColor: tagColor + '60' }
                       : { backgroundColor: '#fff', borderColor: tagColor + '50' },
                     { borderLeftWidth: 3, borderLeftColor: tagColor },
+                    isChanged && styles.checkItemChanged,
                   ]}
                   onPress={() => onToggle(recipe, catId, t)}
                   activeOpacity={0.7}
@@ -86,6 +93,9 @@ export function RoutineChecklist({
                     </Text>
                     <Text style={styles.checkMeta}>{sharedCatNames}</Text>
                   </View>
+                  {isChanged && (
+                    <View style={styles.changedDot} />
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -116,4 +126,12 @@ const styles = StyleSheet.create({
   checkTitle: { fontSize: 14, color: colors.charcoal, lineHeight: 20 },
   checkTitleDone: { textDecorationLine: 'line-through', color: colors.muted },
   checkMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  checkItemChanged: {
+    borderColor: colors.caramel,
+    borderWidth: 2,
+  },
+  changedDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: colors.caramel,
+    marginLeft: 6,
+  },
 });
