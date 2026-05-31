@@ -1,6 +1,6 @@
 // src/services/supabase.ts
 import { createClient } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
@@ -44,6 +44,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     lock: memoryLock,
   },
 });
+
+// RN(Expo) — 백그라운드일 땐 자동 refresh를 멈추고 포그라운드 복귀 시 재개.
+// 웹은 supabase-js가 Page Visibility API로 자동 처리하므로 불필요.
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      supabase.auth.startAutoRefresh();
+    } else {
+      supabase.auth.stopAutoRefresh();
+    }
+  });
+}
 
 export const TABLES = {
   USERS: 'users',

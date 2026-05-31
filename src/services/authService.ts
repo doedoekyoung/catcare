@@ -116,20 +116,12 @@ export function subscribeToAuthState(
           }
         }
       } catch (e: any) {
-        // 인증 오류(401/JWT) → stale 토큰 자동 제거
-        const isAuthError =
-          e?.status === 401 ||
-          String(e?.message ?? '').toLowerCase().includes('jwt') ||
-          String(e?.message ?? '').toLowerCase().includes('token') ||
-          e?.code === 'PGRST301';
-        if (isAuthError) {
-          clearUserCache();
-          await supabase.auth.signOut({ scope: 'local' });
-          cb(null);
-        } else {
-          // 네트워크 오류 등 일시적 오류 → 캐시로 유지
-          cb(readUserCache(session.user.id));
-        }
+        // 어떤 에러든 (401/JWT/네트워크) 즉시 signOut 하지 않음.
+        // 콜드 스타트 시 stale access token으로 401이 떨어져도 supabase JS가
+        // 백그라운드에서 refresh token으로 갱신을 시도 중일 수 있으므로 그 기회를
+        // 양보. 캐시로 우선 버티고, 진짜 stale이라면 곧 SIGNED_OUT 이벤트가 와서
+        // 위쪽 분기에서 cb(null)이 호출됨.
+        cb(readUserCache(session.user.id));
       }
     }
   );
