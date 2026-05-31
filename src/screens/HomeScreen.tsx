@@ -8,18 +8,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore, selectActiveRecipesForCats, selectCompletionRate } from '../store/useStore';
 import { upsertCheck, getChecksForDateRange } from '../services/dbService';
-import { Card, SectionTitle, EmptyState } from '../components/ui';
-import { colors, spacing, radius, shadow } from '../utils/theme';
+import { Card, EmptyState } from '../components/ui';
+import { RoutineChecklist } from '../components/RoutineChecklist';
+import { colors, spacing, radius } from '../utils/theme';
 import { toDateKey, getLast30Days } from '../utils/date';
 import type { CheckRecord, Recipe, TimeSlot } from '../types';
-
-const TIME_LABELS: Record<TimeSlot, string> = {
-  morning: '아침',
-  lunch: '점심',
-  evening: '저녁',
-};
-
-const TIME_SLOTS: TimeSlot[] = ['morning', 'lunch', 'evening'];
 
 export default function HomeScreen() {
   const {
@@ -66,18 +59,9 @@ export default function HomeScreen() {
   const activeRecipes = selectActiveRecipesForCats(recipes, selectedCatIds, today);
   const { done, total, pct } = selectCompletionRate(recipes, checks, today, selectedCatIds);
 
-  // 시간대별 그룹 — 복수 시간대 지원
-  const grouped: Record<TimeSlot, Recipe[]> = { morning: [], lunch: [], evening: [] };
-  activeRecipes.forEach((r) => {
-    r.times.forEach((t) => {
-      if (!grouped[t].includes(r)) grouped[t].push(r);
-    });
-  });
-
   const handleToggleCheck = useCallback(
-    async (recipe: Recipe, timeSlot: TimeSlot) => {
+    async (recipe: Recipe, catId: string, timeSlot: TimeSlot) => {
       if (!household || !user) return;
-      const catId = recipe.catIds.find((id) => selectedCatIds.includes(id)) ?? recipe.catIds[0];
       const key = `${today}_${recipe.id}_${catId}_${timeSlot}`;
       const current = checks[key];
       const newDone = !(current?.done ?? false);
@@ -92,7 +76,7 @@ export default function HomeScreen() {
       toggleCheck(key, record);
       await upsertCheck(household.id, record);
     },
-    [checks, household, user, today, selectedCatIds, toggleCheck]
+    [checks, household, user, today, toggleCheck]
   );
 
   return (
@@ -170,50 +154,17 @@ export default function HomeScreen() {
           />
         )}
 
-        {/* Checklist by time group */}
-        {TIME_SLOTS.map((t) => {
-          if (!grouped[t].length) return null;
-          return (
-            <View key={t} style={styles.section}>
-              <SectionTitle title={TIME_LABELS[t]} />
-              {grouped[t].map((recipe) => {
-                const catId = recipe.catIds.find((id) => selectedCatIds.includes(id)) ?? recipe.catIds[0];
-                const key = `${today}_${recipe.id}_${catId}_${t}`;
-                const isDone = checks[key]?.done ?? false;
-                const cat = cats.find((c) => c.id === catId);
-                const tagColor = cat?.tagColor ?? colors.caramel;
-                const sharedCatNames = recipe.catIds
-                  .map((id) => cats.find((c) => c.id === id)?.name)
-                  .filter(Boolean).join(', ');
-                return (
-                  <TouchableOpacity
-                    testID={`home-check-${recipe.id}-${t}`}
-                    key={`${recipe.id}-${t}`}
-                    style={[
-                      styles.checkItem,
-                      isDone
-                        ? { backgroundColor: tagColor + '18', borderColor: tagColor + '60' }
-                        : { backgroundColor: '#fff', borderColor: tagColor + '50' },
-                      { borderLeftWidth: 3, borderLeftColor: tagColor },
-                    ]}
-                    onPress={() => handleToggleCheck(recipe, t)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.checkBox, isDone && { backgroundColor: tagColor, borderColor: tagColor }]}>
-                      {isDone && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
-                    </View>
-                    <View style={styles.checkText}>
-                      <Text style={[styles.checkTitle, isDone && styles.checkTitleDone]}>
-                        {recipe.name}
-                      </Text>
-                      <Text style={styles.checkMeta}>{sharedCatNames}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          );
-        })}
+        {activeRecipes.length > 0 && (
+          <RoutineChecklist
+            date={today}
+            cats={cats}
+            recipes={recipes}
+            selectedCatIds={selectedCatIds}
+            checks={checks}
+            onToggle={handleToggleCheck}
+            testIDPrefix="home-check"
+          />
+        )}
 
         {activeRecipes.length === 0 && cats.length > 0 && (
           <Card style={{ backgroundColor: colors.warnBg }}>
@@ -263,19 +214,4 @@ const styles = StyleSheet.create({
   catQuickDivider: { fontSize: 12, color: colors.border },
   scroll: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: 80 },
-  section: { marginBottom: spacing.lg },
-  checkItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: spacing.md, borderRadius: radius.md,
-    borderWidth: 1.5, marginBottom: 8, ...shadow.sm,
-  },
-  checkBox: {
-    width: 22, height: 22, borderRadius: 7,
-    borderWidth: 2, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff',
-  },
-  checkText: { flex: 1 },
-  checkTitle: { fontSize: 14, color: colors.charcoal, lineHeight: 20 },
-  checkTitleDone: { textDecorationLine: 'line-through', color: colors.muted },
-  checkMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
 });

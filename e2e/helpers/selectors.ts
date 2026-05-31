@@ -45,4 +45,12 @@ export const sel = {
   recordsAddLog: (catId: string) => `records-add-log-${catId}`,
   logFormTextInput: 'log-form-text-input',
   logFormSaveButton: 'log-form-save-button',
+
+  // Calendar (past routine edit)
+  recordsCalPrevMonth: 'records-cal-prev-month',
+  recordsCalNextMonth: 'records-cal-next-month',
+  recordsCalDay: (dateKey: string) => `records-cal-day-${dateKey}`,
+  recordsCalEditToggle: 'records-cal-edit-toggle',
+  recordsCalEditBody: 'records-cal-edit-body',
+  recordsCalCheck: (recipeId: string, slot: 'morning' | 'lunch' | 'evening') => `records-cal-check-${recipeId}-${slot}`,
 } as const;

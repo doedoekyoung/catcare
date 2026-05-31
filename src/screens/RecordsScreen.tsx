@@ -1,17 +1,18 @@
 // src/screens/RecordsScreen.tsx
 // REQ-V4-02, V5-03~04
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
 import { BottomSheet, Button, Input, EmptyState } from '../components/ui';
+import { RoutineChecklist } from '../components/RoutineChecklist';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { toDateKey, getLast30Days } from '../utils/date';
-import { getLogsForDateRange, upsertLog, getChecksForDateRange } from '../services/dbService';
-import type { DailyLog, CheckRecord, TimeSlot } from '../types';
+import { getLogsForDateRange, upsertLog, upsertCheck, getChecksForDateRange } from '../services/dbService';
+import type { DailyLog, CheckRecord, Recipe, TimeSlot } from '../types';
 
 type MissItem = { recipeId: string; recipeName: string; catId: string; timeSlot: TimeSlot };
 
@@ -70,7 +71,7 @@ function toCalKey(year: number, month: number, day: number): string {
 }
 
 export default function RecordsScreen() {
-  const { cats, recipes, logs, household, user, setLogs } = useStore();
+  const { cats, recipes, logs, household, user, setLogs, checks: todayChecks } = useStore();
 
   const today = toDateKey();
   const [activeTab, setActiveTab] = useState<'write' | 'calendar'>('write');
@@ -235,6 +236,62 @@ export default function RecordsScreen() {
 
   const [toggledMissCats, setToggledMissCats] = useState<Set<string>>(new Set());
   useEffect(() => { setToggledMissCats(new Set()); }, [selectedCalDate, activeCatFilter]);
+
+  // 달력에서 선택한 날의 checks (오늘이면 store, 과거면 일회성 fetch).
+  // 과거 날짜 루틴 수정용 — 미래는 비활성화이므로 fetch 안 함.
+  const [selectedDateChecks, setSelectedDateChecks] = useState<Record<string, CheckRecord>>({});
+  const [showEditCheck, setShowEditCheck] = useState(false);
+  useEffect(() => {
+    setShowEditCheck(false);
+    if (!household?.id || !selectedCalDate) { setSelectedDateChecks({}); return; }
+    if (selectedCalDate === today) {
+      setSelectedDateChecks(todayChecks);
+      return;
+    }
+    if (selectedCalDate > today) { setSelectedDateChecks({}); return; }
+    getChecksForDateRange(household.id, selectedCalDate, selectedCalDate)
+      .then((arr) => {
+        const map: Record<string, CheckRecord> = {};
+        arr.forEach((c) => { map[c.id] = c; });
+        setSelectedDateChecks(map);
+      })
+      .catch(() => setSelectedDateChecks({}));
+  }, [household?.id, selectedCalDate, today, todayChecks]);
+
+  const selectedCatIdsForCheck = useMemo(
+    () => activeCatFilter ? [activeCatFilter] : cats.map((c) => c.id),
+    [activeCatFilter, cats]
+  );
+
+  const handlePastToggle = useCallback(
+    async (recipe: Recipe, catId: string, ts: TimeSlot) => {
+      if (!household || !user || !selectedCalDate) return;
+      const key = `${selectedCalDate}_${recipe.id}_${catId}_${ts}`;
+      const current = selectedDateChecks[key];
+      const newDone = !(current?.done ?? false);
+      const record: CheckRecord = {
+        id: key, date: selectedCalDate, recipeId: recipe.id, catId,
+        done: newDone,
+        // 과거 보정 — 정확한 시각을 모르므로 doneAt은 비움 (오늘은 HomeScreen에서 new Date())
+        doneAt: selectedCalDate === today && newDone ? new Date().toISOString() : undefined,
+        doneBy: user.uid,
+        householdId: household.id,
+        memo: current?.memo,
+      };
+      // 낙관 업데이트 — 화면 즉시 반영
+      setSelectedDateChecks((prev) => ({ ...prev, [key]: record }));
+      // 미완료 카운트(missByDate) 즉시 갱신을 위해 historyChecks에도 반영
+      setHistoryChecks((prev) => {
+        const idx = prev.findIndex((c) => c.id === key);
+        if (idx >= 0) {
+          const next = [...prev]; next[idx] = record; return next;
+        }
+        return [...prev, record];
+      });
+      try { await upsertCheck(household.id, record); } catch { /* 토스트 생략 — 낙관 UI 유지 */ }
+    },
+    [household, user, selectedCalDate, selectedDateChecks, today]
+  );
   const toggleMissCat = (catId: string) => {
     setToggledMissCats((prev) => {
       const next = new Set(prev);
@@ -472,11 +529,11 @@ export default function RecordsScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {/* Month navigation */}
           <View style={styles.calHeader}>
-            <TouchableOpacity style={styles.calNavBtn} onPress={prevCalMonth}>
+            <TouchableOpacity testID="records-cal-prev-month" style={styles.calNavBtn} onPress={prevCalMonth}>
               <Text style={styles.calNavText}>‹</Text>
             </TouchableOpacity>
             <Text style={styles.calMonthLabel}>{calYear}년 {MONTHS_KR[calMonth]}</Text>
-            <TouchableOpacity style={styles.calNavBtn} onPress={nextCalMonth}>
+            <TouchableOpacity testID="records-cal-next-month" style={styles.calNavBtn} onPress={nextCalMonth}>
               <Text style={styles.calNavText}>›</Text>
             </TouchableOpacity>
           </View>
@@ -519,15 +576,19 @@ export default function RecordsScreen() {
               const missCount = (missByDate[dateKey] ?? []).length;
               const isToday = dateKey === today;
               const isSelected = dateKey === selectedCalDate;
+              const isFuture = dateKey > today;
               const dayOfWeek = (getFirstDayOfWeek(calYear, calMonth) + day - 1) % 7;
 
               return (
                 <TouchableOpacity
+                  testID={`records-cal-day-${dateKey}`}
                   key={dateKey}
+                  disabled={isFuture}
                   style={[
                     styles.calCell,
                     isSelected && { backgroundColor: colors.caramel + '20' },
                     isToday && styles.calCellToday,
+                    isFuture && { opacity: 0.35 },
                   ]}
                   onPress={() => setSelectedCalDate(isSelected ? null : dateKey)}
                   activeOpacity={0.7}
@@ -625,6 +686,33 @@ export default function RecordsScreen() {
                   )}
                 </View>
               )}
+
+              {/* 과거/오늘 날짜 — 체크 수정 토글 */}
+              <View style={styles.editCheckWrap}>
+                <TouchableOpacity
+                  testID="records-cal-edit-toggle"
+                  style={styles.editCheckToggle}
+                  onPress={() => setShowEditCheck((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.editCheckToggleText}>
+                    {showEditCheck ? '✕ 체크 수정 닫기' : '✓ 이 날의 체크 수정'}
+                  </Text>
+                </TouchableOpacity>
+                {showEditCheck && (
+                  <View style={styles.editCheckBody} testID="records-cal-edit-body">
+                    <RoutineChecklist
+                      date={selectedCalDate}
+                      cats={cats}
+                      recipes={recipes}
+                      selectedCatIds={selectedCatIdsForCheck}
+                      checks={selectedDateChecks}
+                      onToggle={handlePastToggle}
+                      testIDPrefix="records-cal-check"
+                    />
+                  </View>
+                )}
+              </View>
 
               {selectedLogs.length > 0 ? (
                 selectedLogs.map((log) => {
@@ -956,4 +1044,16 @@ const styles = StyleSheet.create({
   logTagText: { fontSize: 11, fontWeight: '600' },
   selectedLogText: { fontSize: 14, color: colors.charcoal, lineHeight: 22 },
   selectedLogEmpty: { fontSize: 13, color: colors.muted, textAlign: 'center', paddingVertical: 8 },
+  editCheckWrap: {
+    marginTop: spacing.md, marginBottom: spacing.md,
+    borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md,
+  },
+  editCheckToggle: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6, paddingHorizontal: 12,
+    borderRadius: radius.full, borderWidth: 1, borderColor: colors.caramel,
+    backgroundColor: colors.caramel + '12',
+  },
+  editCheckToggleText: { fontSize: 12, fontWeight: '600', color: colors.caramel },
+  editCheckBody: { marginTop: spacing.md },
 });
