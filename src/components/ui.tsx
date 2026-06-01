@@ -195,7 +195,9 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
     );
   }
 
-  // 네이티브 (Modal) — KeyboardAvoidingView로 키보드가 입력 필드를 가리지 않도록 처리
+  // 네이티브 (Modal) — KeyboardAvoidingView로 키보드가 입력 필드를 가리지 않도록 처리.
+  // ScrollView를 자연 크기로 두고 sheet maxHeight로 제한 — flex:1은 부모 height가
+  // 명시되지 않은 안드로이드 Modal 안에서 0 height가 되어 children이 안 보인다.
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -214,7 +216,6 @@ export function BottomSheet({ visible, onClose, title, children }: SheetProps) {
             {title && <Text style={styles.sheetTitle}>{title}</Text>}
             <ScrollView
               showsVerticalScrollIndicator={false}
-              style={{ flex: 1 }}
               contentContainerStyle={{ paddingBottom: bottomPad }}
               keyboardShouldPersistTaps="handled"
             >
