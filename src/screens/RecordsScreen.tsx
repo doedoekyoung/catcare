@@ -679,6 +679,18 @@ export default function RecordsScreen() {
             <View style={[styles.selectedLogCard, shadow.sm]}>
               <View style={styles.selectedLogHeader}>
                 <Text style={styles.selectedLogDate}>{formatDisplayDateCal(selectedCalDate)}</Text>
+                {!showEditCheck && (
+                  <TouchableOpacity
+                    testID="records-cal-edit-toggle"
+                    style={[styles.iconBtn, selectedDateLoading && { opacity: 0.5 }]}
+                    onPress={openEditMode}
+                    disabled={selectedDateLoading}
+                  >
+                    <Text style={styles.iconBtnText}>
+                      {selectedDateLoading ? '불러오는 중...' : '편집'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {selectedMisses.length > 0 && (
@@ -743,50 +755,36 @@ export default function RecordsScreen() {
                 </View>
               )}
 
-              {/* 과거/오늘 날짜 — 체크 수정 편집 모드 (저장/취소) */}
-              <View style={styles.editCheckWrap}>
-                {!showEditCheck ? (
-                  <TouchableOpacity
-                    testID="records-cal-edit-toggle"
-                    style={[styles.editCheckToggle, selectedDateLoading && { opacity: 0.5 }]}
-                    onPress={openEditMode}
-                    disabled={selectedDateLoading}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.editCheckToggleText}>
-                      {selectedDateLoading ? '불러오는 중...' : '✓ 이 날의 체크 수정'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View testID="records-cal-edit-body">
-                    <RoutineChecklist
-                      date={selectedCalDate}
-                      cats={cats}
-                      recipes={recipes}
-                      selectedCatIds={selectedCatIdsForCheck}
-                      checks={pendingChecks}
-                      onToggle={handlePastToggle}
-                      testIDPrefix="records-cal-check"
-                      highlightedKeys={pendingChangeKeys}
+              {/* 편집 모드 본문 — 헤더의 "편집" 버튼으로 진입한 경우에만 표시 */}
+              {showEditCheck && (
+                <View style={styles.editCheckWrap} testID="records-cal-edit-body">
+                  <RoutineChecklist
+                    date={selectedCalDate}
+                    cats={cats}
+                    recipes={recipes}
+                    selectedCatIds={selectedCatIdsForCheck}
+                    checks={pendingChecks}
+                    onToggle={handlePastToggle}
+                    testIDPrefix="records-cal-check"
+                    highlightedKeys={pendingChangeKeys}
+                  />
+                  <View style={styles.editCheckActions}>
+                    <Button
+                      label="취소"
+                      variant="ghost"
+                      onPress={cancelEdit}
+                      testID="records-cal-edit-cancel"
                     />
-                    <View style={styles.editCheckActions}>
-                      <Button
-                        label="취소"
-                        variant="ghost"
-                        onPress={cancelEdit}
-                        testID="records-cal-edit-cancel"
-                      />
-                      <Button
-                        label={pendingChangeKeys.size > 0 ? `저장 (${pendingChangeKeys.size}개 변경)` : '저장'}
-                        onPress={saveEdit}
-                        disabled={pendingChangeKeys.size === 0}
-                        loading={savingEdit}
-                        testID="records-cal-edit-save"
-                      />
-                    </View>
+                    <Button
+                      label={pendingChangeKeys.size > 0 ? `저장 (${pendingChangeKeys.size}개 변경)` : '저장'}
+                      onPress={saveEdit}
+                      disabled={pendingChangeKeys.size === 0}
+                      loading={savingEdit}
+                      testID="records-cal-edit-save"
+                    />
                   </View>
-                )}
-              </View>
+                </View>
+              )}
 
               {selectedLogs.length > 0 ? (
                 selectedLogs.map((log) => {
@@ -1122,15 +1120,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.md, marginBottom: spacing.md,
     borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md,
   },
-  editCheckToggle: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6, paddingHorizontal: 12,
-    borderRadius: radius.full, borderWidth: 1, borderColor: colors.caramel,
-    backgroundColor: colors.caramel + '12',
-  },
-  editCheckToggleText: { fontSize: 12, fontWeight: '600', color: colors.caramel },
   editCheckActions: {
     flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm,
     marginTop: spacing.md,
   },
+  iconBtn: {
+    paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.sm,
+    backgroundColor: colors.sand, alignItems: 'center', justifyContent: 'center',
+  },
+  iconBtnText: { fontSize: 11, fontWeight: '600', color: colors.brownMid },
 });
