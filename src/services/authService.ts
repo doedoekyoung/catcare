@@ -1,5 +1,5 @@
 // src/services/authService.ts
-import { supabase } from './supabase';
+import { supabase, removeStoredSession } from './supabase';
 import { upsertUser, getUserById } from './dbService';
 import type { User } from '../types';
 
@@ -51,10 +51,12 @@ export async function signOut(): Promise<void> {
 }
 
 // 로컬 세션만 초기화 (서버 세션 유지 → 재로그인 시 데이터 안전)
-// 만료된 토큰이 걸려있을 때 사용
+// 만료된 토큰이 걸려있을 때 사용.
+// signOut({scope:'local'})을 쓰지 않는다: 삭제 전에 refresh 네트워크 호출과 auth lock이
+// 필요해서, refresh가 멈춘 상황에선 이 함수도 같이 멈춘다. 저장소를 직접 지운다.
 export async function clearLocalSession(): Promise<void> {
   clearUserCache();
-  try { await supabase.auth.signOut({ scope: 'local' }); } catch {}
+  await removeStoredSession();
 }
 
 const USER_CACHE_KEY = '_cc_user';

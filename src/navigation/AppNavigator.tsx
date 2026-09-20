@@ -173,6 +173,10 @@ export default function AppNavigator() {
             }}
             onPress={async () => {
               await clearLocalSession();
+              // SIGNED_OUT 이벤트는 auth lock 안에서 발생해 멈출 수 있으므로 기다리지 않고
+              // 직접 로그인 화면으로 보낸다. 웹은 추가로 reload로 멈춘 클라이언트 상태를 초기화.
+              setUser(null);
+              setAuthLoaded(true);
               if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
                 window.location.reload();
               }

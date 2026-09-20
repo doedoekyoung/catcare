@@ -32,7 +32,17 @@ export default function AuthScreen() {
       setUser(user);
       setIsOnboarded(true);
     } catch (e: any) {
-      setError('로그인에 실패했습니다. 이메일/비밀번호를 확인해주세요.');
+      // 서버 무응답(타임아웃/네트워크)과 자격 증명 오류를 구분 — 서버 장애 때
+      // 비밀번호 탓으로 오해하지 않도록.
+      const noResponse =
+        e?.name === 'AuthRetryableFetchError' || e?.status === 0 ||
+        e?.name === 'AbortError' || /abort|network|fetch/i.test(e?.message ?? '') ||
+        (e?.message ?? '').includes('사용자 정보를 찾을 수 없습니다');
+      setError(
+        noResponse
+          ? '로그인에 실패했습니다. 서버 응답이 없습니다. 잠시 후 다시 시도해주세요.'
+          : '로그인에 실패했습니다. 이메일/비밀번호를 확인해주세요.'
+      );
     } finally {
       setLoading(false);
     }
