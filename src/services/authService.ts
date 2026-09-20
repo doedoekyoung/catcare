@@ -1,4 +1,5 @@
 // src/services/authService.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, removeStoredSession } from './supabase';
 import { upsertUser, getUserById } from './dbService';
 import type { User } from '../types';
@@ -45,7 +46,7 @@ export async function signInWithEmail(
 }
 
 export async function signOut(): Promise<void> {
-  clearUserCache();
+  await clearUserCache();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
@@ -55,78 +56,127 @@ export async function signOut(): Promise<void> {
 // signOut({scope:'local'})을 쓰지 않는다: 삭제 전에 refresh 네트워크 호출과 auth lock이
 // 필요해서, refresh가 멈춘 상황에선 이 함수도 같이 멈춘다. 저장소를 직접 지운다.
 export async function clearLocalSession(): Promise<void> {
-  clearUserCache();
+  await clearUserCache();
   await removeStoredSession();
 }
 
 const USER_CACHE_KEY = '_cc_user';
 
-// 메모리 캐시 — 모바일(localStorage 없음)에서도 세션 중 복구 가능
+// 메모리 캐시 + AsyncStorage(웹에선 localStorage로 동작) 영속 캐시.
+// 네이티브는 콜드 스타트마다 메모리 캐시가 비므로, 프로필 조회가 일시 실패해도
+// 홈을 유지할 수 있게 영속 캐시가 필요하다.
 let _memCache: User | null = null;
 
 function saveUserCache(user: User): void {
   _memCache = user;
-  try { localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user)); } catch {}
+  AsyncStorage.setItem(USER_CACHE_KEY, JSON.stringify(user)).catch(() => {});
 }
 
-function clearUserCache(): void {
+async function clearUserCache(): Promise<void> {
   _memCache = null;
-  try { localStorage.removeItem(USER_CACHE_KEY); } catch {}
+  try { await AsyncStorage.removeItem(USER_CACHE_KEY); } catch {}
 }
 
-function readUserCache(uid: string): User | null {
+async function readUserCache(uid: string): Promise<User | null> {
   if (_memCache?.uid === uid) return _memCache;
   try {
-    if (typeof localStorage === 'undefined') return null;
-    const raw = localStorage.getItem(USER_CACHE_KEY);
+    const raw = await AsyncStorage.getItem(USER_CACHE_KEY);
     if (!raw) return null;
     const u = JSON.parse(raw) as User;
     return u.uid === uid ? u : null;
   } catch { return null; }
 }
 
+// 프로필 조회 재시도 간격(ms). 누적 ~7.8초 — AppNavigator의 10초 fallback 안에서 끝나도록.
+const PROFILE_RETRY_DELAYS_MS = [0, 800, 2000, 5000];
+const PROFILE_ATTEMPT_TIMEOUT_MS = 6000;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 export function subscribeToAuthState(
   cb: (user: User | null) => void
 ): () => void {
+  // 이벤트가 겹칠 때(INITIAL_SESSION + TOKEN_REFRESHED 등) 늦게 끝난 이전 처리가
+  // 최신 결과를 덮어쓰지 않도록 최신 이벤트만 반영한다.
+  let seq = 0;
+  // 마지막으로 앱에 전달한 사용자. 같은 사용자의 TOKEN_REFRESHED / SIGNED_IN(탭 복귀 등)은
+  // 프로필 재조회와 전 구독 재생성(=DB 재조회 5회)을 유발하므로 건너뛴다.
+  let delivered: User | null = null;
+
+  const deliver = (user: User | null) => { delivered = user; cb(user); };
+
+  const handleSession = async (uid: string, mySeq: number) => {
+    let user: User | null = null;
+    let missingCount = 0; // 요청은 성공했지만 행이 없었던 횟수
+    let requestFailed = false; // 마지막 시도가 요청 실패(네트워크/JWT/타임아웃)였는가
+
+    for (const delay of PROFILE_RETRY_DELAYS_MS) {
+      if (delay) await sleep(delay);
+      if (mySeq !== seq) return;
+      try {
+        user = await withTimeout(getUserById(uid), PROFILE_ATTEMPT_TIMEOUT_MS);
+        requestFailed = false;
+        if (user) break;
+        // 요청은 성공했는데 행이 없음 — 신규가입 트리거 race 흡수용으로 1회만 더 시도.
+        if (++missingCount >= 2) break;
+      } catch {
+        requestFailed = true;
+      }
+    }
+    if (mySeq !== seq) return;
+
+    if (user) {
+      saveUserCache(user);
+      deliver(user);
+      return;
+    }
+
+    if (!requestFailed) {
+      // 서버가 "프로필 행 없음"이라고 확정 응답 — 이 경우에만 stale 세션으로 판정해 정리.
+      await clearUserCache();
+      await removeStoredSession();
+      if (mySeq !== seq) return;
+      deliver(null);
+      return;
+    }
+
+    // 요청이 계속 실패(오프라인/서버 장애) — 세션은 지우지 않는다(refresh token은 유효할 수 있음).
+    // 캐시가 있으면 그걸로 진행하고, 없으면 로그인 화면으로 보내되 세션은 보존.
+    // 이후 네트워크가 돌아와 TOKEN_REFRESHED 등이 오면 이 함수가 다시 실행돼 복구된다.
+    const cached = await readUserCache(uid);
+    if (mySeq !== seq) return;
+    deliver(cached);
+  };
+
   const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    async (event, session) => {
+    // ⚠️ 이 콜백은 supabase-js가 auth lock을 쥔 채로 호출한다(refresh 직후 TOKEN_REFRESHED 등).
+    // 여기서 supabase 호출(DB 조회 등)을 await하면 getSession()이 같은 lock을 기다려
+    // 데드락이 되고, refresh는 성공했는데 앱은 영원히 진행하지 못한다.
+    // 그래서 콜백은 동기로 두고 실제 작업은 setTimeout으로 lock 밖에서 실행한다.
+    (event, session) => {
+      const mySeq = ++seq;
+
       // 명시적 로그아웃 or 세션 없음 → 캐시 정리 후 로그인 화면
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || !session?.user) {
-        clearUserCache();
-        cb(null);
+        void clearUserCache();
+        deliver(null);
         return;
       }
-      try {
-        // 일시적 fetch 실패/RLS 지연/신규가입 트리거 race를 흡수하기 위해 1회 재시도
-        let user = await getUserById(session.user.id);
-        if (!user) {
-          await new Promise((r) => setTimeout(r, 800));
-          user = await getUserById(session.user.id);
-        }
-        if (user) {
-          saveUserCache(user);
-          cb(user);
-        } else {
-          // 재시도해도 없음 → 우선 캐시로 버티고, 캐시도 없을 때만 stale 판정
-          const cached = readUserCache(session.user.id);
-          if (cached) {
-            cb(cached);
-          } else {
-            clearUserCache();
-            await supabase.auth.signOut({ scope: 'local' });
-            cb(null);
-          }
-        }
-      } catch (e: any) {
-        // 어떤 에러든 (401/JWT/네트워크) 즉시 signOut 하지 않음.
-        // 콜드 스타트 시 stale access token으로 401이 떨어져도 supabase JS가
-        // 백그라운드에서 refresh token으로 갱신을 시도 중일 수 있으므로 그 기회를
-        // 양보. 캐시로 우선 버티고, 진짜 stale이라면 곧 SIGNED_OUT 이벤트가 와서
-        // 위쪽 분기에서 cb(null)이 호출됨.
-        cb(readUserCache(session.user.id));
+
+      const uid = session.user.id;
+      if (delivered?.uid === uid && (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN')) {
+        return; // 이미 같은 사용자로 진행 중 — 재조회/재구독 불필요
       }
+
+      setTimeout(() => { void handleSession(uid, mySeq); }, 0);
     }
   );
   return () => subscription.unsubscribe();
 }
-

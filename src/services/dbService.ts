@@ -114,12 +114,15 @@ export async function upsertUser(user: User): Promise<void> {
   if (error) throw error;
 }
 
+// 요청 실패(네트워크/JWT 만료/타임아웃)는 throw, "행 없음"만 null.
+// 둘을 구분하지 않으면 일시적 실패를 "프로필 없음"으로 오판해 세션을 지우게 된다.
 export async function getUserById(uid: string): Promise<User | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from(TABLES.USERS)
     .select()
     .eq('uid', uid)
-    .single();
+    .maybeSingle();
+  if (error) throw error;
   return data ? toUser(data) : null;
 }
 

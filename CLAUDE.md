@@ -83,6 +83,14 @@ if (typeof window !== 'undefined' && window.location) {
 
 **다음에 비슷한 증상이 다시 보이면** — 새로고침 후 로딩 화면이 영원히 안 풀림 / 로그인 버튼 무한 hang / `clearLocalSession()`이 resolve 안 함 — **AppNavigator의 fallback timing이나 getUserById 재시도를 만지지 말 것**. 그건 다 증상이고 근본 원인은 lock. `supabase.ts`의 `lock` 옵션부터 의심하고, supabase-js 업그레이드 후라면 lock 시그니처 호환성도 확인할 것.
 
+### Supabase Auth — `onAuthStateChange` 콜백에서 supabase 호출 `await` 금지 (2026-09)
+
+`onAuthStateChange` 콜백은 supabase-js가 **auth lock을 쥔 채** 호출한다(refresh 직후 `TOKEN_REFRESHED` 등). 콜백 안에서 `getUserById` 같은 DB 조회를 `await`하면 그 조회의 `getSession()`이 같은 lock을 기다려 **데드락** → refresh는 200으로 성공했는데 앱이 진행하지 못하고 10초 fallback으로 로그인 화면이 뜬다(오래 안 쓰다 열면 항상 재로그인하던 원인). 기본 lock/in-memory lock 모두 동일. 콜백은 동기로 두고 작업은 `setTimeout`으로 분리한다(`authService.subscribeToAuthState` 참고).
+
+- 프로필 조회는 "요청 실패"(throw)와 "행 없음"(null)을 구분한다. 실패를 "프로필 없음"으로 오판해 `signOut`하면 유효한 세션을 잃는다.
+- 재발 검증: `e2e/tests/09-session-refresh.spec.ts` (access token 강제 만료 후 새로고침 → 재로그인 없이 홈). `ensureLoggedIn` 헬퍼는 로딩 멈춤 시 저장소를 지우고 재로그인해 이 종류의 버그를 **가리므로** 세션 유지 검증에는 쓰지 않는다.
+- access token 강제 만료: 웹에서 `localStorage`의 `sb-<ref>-auth-token`의 `expires_at`을 과거로 바꾸고 새로고침. (Supabase JWT expiry를 60초 등으로 줄이지 말 것 — 라이브러리가 만료 90초 전부터 갱신 대상으로 보므로 refresh가 연달아 발생.)
+
 ## E2E 테스트
 
 **코드 변경 후 반드시 `npm run test:e2e`를 실행하여 모든 테스트가 통과하는지 확인해야 한다.** 테스트가 실패하는 상태로 커밋하지 않는다.

@@ -26,6 +26,11 @@ jest.mock('../src/services/supabase', () => ({
   TABLES: {},
 }));
 
+// authService의 유저 프로필 캐시가 AsyncStorage를 직접 쓴다 — jest에는 네이티브 모듈이 없어 공식 mock 사용
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
+
 // gesture-handler / reanimated 네이티브 의존성 — 테스트에서는 빈 stub
 jest.mock('react-native-gesture-handler', () => ({
   GestureHandlerRootView: ({ children }: any) => children,
