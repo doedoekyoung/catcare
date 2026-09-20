@@ -3,6 +3,7 @@ import { supabase, TABLES } from './supabase';
 import type { Cat, Recipe, CheckRecord, DailyLog, Household, User } from '../types';
 import { toISOString } from '../utils/date';
 import { throttleWrite, LIMITS, truncate } from '../utils/rateLimit';
+import { hasInterval } from '../utils/schedule';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,8 @@ function toRecipe(row: any): Recipe {
     name: row.name,
     times: row.times ?? [],
     days: row.days ?? [],
+    intervalDays: row.interval_days ?? null,
+    startDate: row.start_date ?? null,
     catIds: row.cat_ids ?? [],
     active: row.active,
     householdId: row.household_id,
@@ -328,6 +331,10 @@ export async function addRecipe(
   if ((count ?? 0) >= LIMITS.MAX_RECIPES) throw new Error(`루틴은 최대 ${LIMITS.MAX_RECIPES}개까지 등록할 수 있습니다.`);
   data = { ...data, name: truncate(data.name, LIMITS.MAX_NAME_LENGTH) };
   const now = toISOString(new Date());
+  // N일마다일 때만 새 컬럼을 보낸다 — 마이그레이션 적용 전 서버에서도 기존 루틴 등록이 깨지지 않도록.
+  const intervalCols = hasInterval(data)
+    ? { interval_days: data.intervalDays, start_date: data.startDate }
+    : {};
   const { data: row, error } = await supabase
     .from(TABLES.RECIPES)
     .insert({
@@ -335,6 +342,7 @@ export async function addRecipe(
       time: data.times[0] ?? 'morning',
       times: data.times,
       days: data.days ?? [],
+      ...intervalCols,
       cat_ids: data.catIds,
       active: data.active,
       household_id: householdId,
@@ -358,6 +366,8 @@ export async function updateRecipe(
   if (data.name !== undefined) update.name = truncate(data.name, LIMITS.MAX_NAME_LENGTH);
   if (data.times !== undefined) update.times = data.times;
   if (data.days !== undefined) update.days = data.days;
+  if (data.intervalDays !== undefined) update.interval_days = data.intervalDays;
+  if (data.startDate !== undefined) update.start_date = data.startDate;
   if (data.catIds !== undefined) update.cat_ids = data.catIds;
   if (data.active !== undefined) update.active = data.active;
   if (data.memo !== undefined) update.memo = data.memo;

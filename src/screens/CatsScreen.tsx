@@ -40,6 +40,10 @@ import {
 import { Button, Input, BottomSheet, EmptyState } from '../components/ui';
 import { colors, spacing, radius, shadow, CAT_TAG_COLORS } from '../utils/theme';
 import { toDateKey } from '../utils/date';
+import {
+  isScheduledOn, scheduleLabel, isValidDateKey, hasInterval,
+  MIN_INTERVAL_DAYS, MAX_INTERVAL_DAYS,
+} from '../utils/schedule';
 import type { Cat, Recipe, TimeSlot, CheckRecord } from '../types';
 
 const GENDER_OPTIONS = [
@@ -55,10 +59,6 @@ const TIME_OPTIONS: { value: TimeSlot; label: string }[] = [
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
-function daysLabel(days: number[]): string {
-  if (!days || days.length === 0 || days.length === 7) return '매일';
-  return '매주 ' + [...days].sort((a, b) => a - b).map((d) => DAY_NAMES[d]).join('·');
-}
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_VALUES  = Array.from({ length: CURRENT_YEAR - 1989 }, (_, i) => CURRENT_YEAR - i);
@@ -217,10 +217,7 @@ function getCheckStatus(
   date: string,
   allChecks: CheckRecord[],
 ): '✓' | '✗' | '—' {
-  const d = new Date(date + 'T00:00:00');
-  const dayOfWeek = d.getDay();
-  const scheduled = recipe.days.length === 0 || recipe.days.includes(dayOfWeek);
-  if (!scheduled) return '—';
+  if (!isScheduledOn(recipe, date)) return '—';
   const done = allChecks.some(
     (c) => c.date === date && c.recipeId === recipe.id && c.done
   );
@@ -251,10 +248,8 @@ export default function CatsScreen() {
     const last7 = getLast7Days();
     let total = 0; let done = 0;
     last7.forEach((date) => {
-      const d = new Date(date + 'T00:00:00').getDay();
       catRecipes.forEach((r) => {
-        const scheduled = (r.days ?? []).length === 0 || (r.days ?? []).includes(d);
-        if (!scheduled) return;
+        if (!isScheduledOn(r, date)) return;
         r.times.forEach(() => { total++; });
         r.times.forEach((t) => {
           if (historyChecks.some((c) => c.date === date && c.recipeId === r.id && c.catId === cat.id && c.done && (c as any).timeSlot === t || historyChecks.some((c) => c.id === `${date}_${r.id}_${cat.id}_${t}` && c.done))) done++;
@@ -283,6 +278,10 @@ export default function CatsScreen() {
   const [recipeName, setRecipeName] = useState('');
   const [recipeTimes, setRecipeTimes] = useState<TimeSlot[]>(['morning']);
   const [recipeDays, setRecipeDays] = useState<number[]>([]); // 빈 배열 = 매일
+  // 반복 방식: 요일별(기본) / N일마다. N일마다는 시작일 기준.
+  const [recipeMode, setRecipeMode] = useState<'weekly' | 'interval'>('weekly');
+  const [recipeInterval, setRecipeInterval] = useState('2'); // 입력 중 빈 값 허용을 위해 문자열
+  const [recipeStartDate, setRecipeStartDate] = useState(toDateKey());
   const [recipeSharedCatIds, setRecipeSharedCatIds] = useState<string[]>([]);
 
   // ── Image picker ──────────────────────────────────────────────────────────────
@@ -377,6 +376,9 @@ export default function CatsScreen() {
     setRecipeName('');
     setRecipeTimes(['morning']);
     setRecipeDays([]);
+    setRecipeMode('weekly');
+    setRecipeInterval('2');
+    setRecipeStartDate(toDateKey()); // 시작일 기본값 = 등록하는 날
     setRecipeSharedCatIds([catId]);
     setRecipeModal(true);
   };
@@ -387,6 +389,15 @@ export default function CatsScreen() {
     setRecipeName(recipe.name);
     setRecipeTimes(recipe.times);
     setRecipeDays(recipe.days ?? []);
+    if (hasInterval(recipe)) {
+      setRecipeMode('interval');
+      setRecipeInterval(String(recipe.intervalDays));
+      setRecipeStartDate(recipe.startDate as string);
+    } else {
+      setRecipeMode('weekly');
+      setRecipeInterval('2');
+      setRecipeStartDate(toDateKey());
+    }
     setRecipeSharedCatIds(recipe.catIds);
     setRecipeModal(true);
   };
@@ -394,20 +405,39 @@ export default function CatsScreen() {
   const handleSaveRecipe = async () => {
     if (!recipeName.trim() || !household || recipeTimes.length === 0) return;
     const catIds = recipeSharedCatIds.length > 0 ? recipeSharedCatIds : [targetCatId];
-    const days = recipeDays.length === 7 ? [] : recipeDays; // 전체 선택 = 빈 배열(매일)
+    // 반복 설정: N일마다면 요일(days)은 비우고 간격+시작일을 저장, 아니면 요일 방식.
+    let schedule: Pick<Recipe, 'days' | 'intervalDays' | 'startDate'>;
+    if (recipeMode === 'interval') {
+      const n = Number(recipeInterval);
+      if (!Number.isInteger(n) || n < MIN_INTERVAL_DAYS || n > MAX_INTERVAL_DAYS) {
+        webAlert('입력 확인', `반복 간격은 ${MIN_INTERVAL_DAYS}~${MAX_INTERVAL_DAYS}일 사이의 숫자로 입력해주세요.`);
+        return;
+      }
+      if (!isValidDateKey(recipeStartDate)) {
+        webAlert('입력 확인', '시작일을 YYYY-MM-DD 형식으로 입력해주세요. (예: 2026-09-20)');
+        return;
+      }
+      schedule = { days: [], intervalDays: n, startDate: recipeStartDate };
+    } else {
+      schedule = {
+        days: recipeDays.length === 7 ? [] : recipeDays, // 전체 선택 = 빈 배열(매일)
+        // 이전에 N일마다였다면 해제(null). 원래 요일 방식이면 컬럼을 건드리지 않는다(마이그레이션 전 호환).
+        ...(editingRecipe && hasInterval(editingRecipe) ? { intervalDays: null, startDate: null } : {}),
+      };
+    }
     try {
       if (editingRecipe) {
         await updateRecipe(household.id, editingRecipe.id, {
-          name: recipeName.trim(), times: recipeTimes, days, catIds,
+          name: recipeName.trim(), times: recipeTimes, ...schedule, catIds,
         });
         setRecipes(recipes.map((r) =>
           r.id === editingRecipe.id
-            ? { ...r, name: recipeName.trim(), times: recipeTimes, days, catIds }
+            ? { ...r, name: recipeName.trim(), times: recipeTimes, ...schedule, catIds }
             : r
         ));
       } else {
         const recipe = await fsAddRecipe(household.id, {
-          name: recipeName.trim(), times: recipeTimes, days, catIds,
+          name: recipeName.trim(), times: recipeTimes, ...schedule, catIds,
           active: true, householdId: household.id,
         });
         setRecipes([...recipes, recipe]);
@@ -536,7 +566,7 @@ export default function CatsScreen() {
                               </Text>
                             </View>
                           ))}
-                          <Text style={styles.recipeMeta}>{daysLabel(r.days ?? [])}</Text>
+                          <Text style={styles.recipeMeta}>{scheduleLabel(r)}</Text>
                           {r.catIds.length > 1 && (
                             <Text style={styles.recipeMeta}>공유: {r.catIds.map((id) => cats.find((c) => c.id === id)?.name).filter(Boolean).join(', ')}</Text>
                           )}
@@ -718,49 +748,134 @@ export default function CatsScreen() {
           ))}
         </View>
 
-        {/* 요일 선택 */}
-        <View style={styles.dayLabelRow}>
-          <Text style={styles.fieldLabel}>반복 요일</Text>
-          <Text style={styles.dayResultText}>{daysLabel(recipeDays)}</Text>
+        {/* 반복 방식: 요일별 / N일마다 */}
+        <Text style={styles.fieldLabel}>반복 방식</Text>
+        <View style={styles.optionRow}>
+          <TouchableOpacity
+            testID="recipe-form-mode-weekly"
+            style={[styles.optionChip, recipeMode === 'weekly' && styles.optionChipSel]}
+            onPress={() => setRecipeMode('weekly')}
+          >
+            <Text style={[styles.optionText, recipeMode === 'weekly' && styles.optionTextSel]}>요일별</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="recipe-form-mode-interval"
+            style={[styles.optionChip, recipeMode === 'interval' && styles.optionChipSel]}
+            onPress={() => setRecipeMode('interval')}
+          >
+            <Text style={[styles.optionText, recipeMode === 'interval' && styles.optionTextSel]}>N일마다 (격일 등)</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          testID="recipe-form-everyday"
-          style={[styles.everyDayBtn, recipeDays.length === 0 && styles.everyDayBtnSel]}
-          onPress={setEveryDay}
-          activeOpacity={0.75}
-        >
-          <Text style={[styles.everyDayText, recipeDays.length === 0 && styles.everyDayTextSel]}>
-            매일
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.dayRow}>
-          {DAY_NAMES.map((name, idx) => {
-            const isEveryDay = recipeDays.length === 0;
-            const isPicked = recipeDays.includes(idx);
-            return (
-              <TouchableOpacity
-                key={idx}
-                style={[
-                  styles.dayBtn,
-                  isEveryDay && styles.dayBtnAllOn,
-                  !isEveryDay && isPicked && styles.dayBtnSel,
-                ]}
-                onPress={() => toggleRecipeDay(idx)}
-                activeOpacity={0.75}
-              >
-                <Text
+
+        {recipeMode === 'weekly' ? (
+          <>
+          <View style={styles.dayLabelRow}>
+            <Text style={styles.fieldLabel}>반복 요일</Text>
+            <Text style={styles.dayResultText}>{scheduleLabel({ days: recipeDays })}</Text>
+          </View>
+          <TouchableOpacity
+            testID="recipe-form-everyday"
+            style={[styles.everyDayBtn, recipeDays.length === 0 && styles.everyDayBtnSel]}
+            onPress={setEveryDay}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.everyDayText, recipeDays.length === 0 && styles.everyDayTextSel]}>
+              매일
+            </Text>
+          </TouchableOpacity>
+          <View style={styles.dayRow}>
+            {DAY_NAMES.map((name, idx) => {
+              const isEveryDay = recipeDays.length === 0;
+              const isPicked = recipeDays.includes(idx);
+              return (
+                <TouchableOpacity
+                  key={idx}
                   style={[
-                    styles.dayBtnText,
-                    isEveryDay && styles.dayBtnTextAllOn,
-                    !isEveryDay && isPicked && styles.dayBtnTextSel,
+                    styles.dayBtn,
+                    isEveryDay && styles.dayBtnAllOn,
+                    !isEveryDay && isPicked && styles.dayBtnSel,
                   ]}
+                  onPress={() => toggleRecipeDay(idx)}
+                  activeOpacity={0.75}
                 >
-                  {name}
-                </Text>
+                  <Text
+                    style={[
+                      styles.dayBtnText,
+                      isEveryDay && styles.dayBtnTextAllOn,
+                      !isEveryDay && isPicked && styles.dayBtnTextSel,
+                    ]}
+                  >
+                    {name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.dayLabelRow}>
+              <Text style={styles.fieldLabel}>반복 간격</Text>
+              <Text style={styles.dayResultText}>
+                {isValidDateKey(recipeStartDate) && Number(recipeInterval) >= MIN_INTERVAL_DAYS
+                  ? scheduleLabel({ days: [], intervalDays: Number(recipeInterval), startDate: recipeStartDate })
+                  : ''}
+              </Text>
+            </View>
+            <View style={styles.optionRow}>
+              {[2, 3, 7].map((n) => (
+                <TouchableOpacity
+                  key={n}
+                  testID={`recipe-form-interval-chip-${n}`}
+                  style={[styles.optionChip, recipeInterval === String(n) && styles.optionChipSel]}
+                  onPress={() => setRecipeInterval(String(n))}
+                >
+                  <Text style={[styles.optionText, recipeInterval === String(n) && styles.optionTextSel]}>
+                    {n === 2 ? '격일' : `${n}일마다`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Input
+              testID="recipe-form-interval-input"
+              label="직접 입력 (일)"
+              value={recipeInterval}
+              onChangeText={(t) => setRecipeInterval(t.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              placeholder="예: 4"
+              maxLength={3}
+            />
+            <Input
+              testID="recipe-form-start-date-input"
+              label="시작일 (이 날부터 해당, 이전 날짜는 해당 없음)"
+              value={recipeStartDate}
+              onChangeText={setRecipeStartDate}
+              placeholder="YYYY-MM-DD"
+              maxLength={10}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.optionRow}>
+              <TouchableOpacity
+                testID="recipe-form-start-today"
+                style={[styles.optionChip, recipeStartDate === toDateKey() && styles.optionChipSel]}
+                onPress={() => setRecipeStartDate(toDateKey())}
+              >
+                <Text style={[styles.optionText, recipeStartDate === toDateKey() && styles.optionTextSel]}>오늘부터</Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
+              <TouchableOpacity
+                testID="recipe-form-start-tomorrow"
+                style={styles.optionChip}
+                onPress={() => {
+                  const t = new Date(); t.setDate(t.getDate() + 1);
+                  setRecipeStartDate(toDateKey(t));
+                }}
+              >
+                <Text style={styles.optionText}>내일부터</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
         <Text style={styles.fieldLabel}>적용 고양이 * (복수 선택 가능)</Text>
         <View style={styles.optionRow}>
           {cats.map((c) => {

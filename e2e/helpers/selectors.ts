@@ -31,6 +31,12 @@ export const sel = {
   recipeFormSaveButton: 'recipe-form-save-button',
   recipeFormTimeMorning: 'recipe-form-time-morning',
   recipeFormDeleteButton: 'recipe-form-delete-button',
+  recipeFormModeWeekly: 'recipe-form-mode-weekly',
+  recipeFormModeInterval: 'recipe-form-mode-interval',
+  recipeFormIntervalChip: (n: number) => `recipe-form-interval-chip-${n}`,
+  recipeFormIntervalInput: 'recipe-form-interval-input',
+  recipeFormStartDateInput: 'recipe-form-start-date-input',
+  recipeFormStartToday: 'recipe-form-start-today',
   recipeToggle: (recipeId: string) => `recipe-toggle-${recipeId}`,
 
   // Records

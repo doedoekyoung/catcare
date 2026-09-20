@@ -17,6 +17,7 @@ import { Button, Input, Card, BottomSheet } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import InAppBrowserBanner from '../components/InAppBrowserBanner';
 import { toDateKey, formatFullDate } from '../utils/date';
+import { isScheduledOn } from '../utils/schedule';
 import type { Cat, Recipe, CheckRecord, Household, TimeSlot, DailyLog } from '../types';
 import type { RootStackParamList } from '../types';
 
@@ -203,6 +204,7 @@ export default function ShareScreen() {
   // 활성 루틴에서 선택된 고양이 기준으로 필터링
   const filteredRecipes = recipes.filter((r) => {
     if (!r.active) return false;
+    if (!isScheduledOn(r, today)) return false;
     if (activeCatId === null) return true;
     return r.catIds.includes(activeCatId);
   });

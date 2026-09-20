@@ -27,6 +27,8 @@ export interface Recipe {
   name: string;
   times: TimeSlot[];           // 복수 시간대 선택
   days: number[];              // 0=일 1=월 2=화 3=수 4=목 5=금 6=토, 빈 배열=매일
+  intervalDays?: number | null; // N일마다(2 이상). 있으면 days(요일)는 무시. null/없음=요일 방식
+  startDate?: string | null;   // N일마다의 시작일 'YYYY-MM-DD'. 이전 날짜는 해당 없음
   catIds: string[];
   active: boolean;
   householdId: string;

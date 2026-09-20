@@ -12,6 +12,7 @@ import { Card, EmptyState } from '../components/ui';
 import { RoutineChecklist } from '../components/RoutineChecklist';
 import { colors, spacing, radius } from '../utils/theme';
 import { toDateKey, getLast30Days } from '../utils/date';
+import { isScheduledOn } from '../utils/schedule';
 import type { CheckRecord, Recipe, TimeSlot } from '../types';
 
 export default function HomeScreen() {
@@ -40,10 +41,8 @@ export default function HomeScreen() {
     let total = 0; let done = 0;
     const days = getLast30Days().slice(-7);
     days.forEach((date) => {
-      const dow = new Date(date + 'T00:00:00').getDay();
       catRecipes.forEach((r) => {
-        const scheduled = (r.days ?? []).length === 0 || (r.days ?? []).includes(dow);
-        if (!scheduled) return;
+        if (!isScheduledOn(r, date)) return;
         r.times.forEach((t) => {
           total++;
           if (historyChecks.some((c) => c.id === `${date}_${r.id}_${catId}_${t}` && c.done)) done++;

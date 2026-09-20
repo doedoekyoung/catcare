@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import type { AppState, Cat, Recipe, CheckRecord, DailyLog, Household, User } from '../types';
+import { isScheduledOn } from '../utils/schedule';
 
 export const useStore = create<AppState>((set, get) => ({
   user: null,
@@ -61,13 +62,10 @@ export const selectActiveRecipesForCats = (
   date?: string
 ): Recipe[] => {
   if (catIds.length === 0) return [];
-  const dow = date
-    ? new Date(date + 'T00:00:00').getDay()
-    : null;
   return recipes.filter((r) => {
     if (!r.active) return false;
     if (!r.catIds.some((cid) => catIds.includes(cid))) return false;
-    if (dow !== null && (r.days ?? []).length > 0 && !(r.days ?? []).includes(dow)) return false;
+    if (date && !isScheduledOn(r, date)) return false;
     return true;
   });
 };

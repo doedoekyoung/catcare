@@ -11,6 +11,7 @@ import { BottomSheet, Button, Input, EmptyState } from '../components/ui';
 import { RoutineChecklist } from '../components/RoutineChecklist';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { toDateKey, getLast30Days } from '../utils/date';
+import { isScheduledOn } from '../utils/schedule';
 import { getLogsForDateRange, upsertLog, upsertCheck, getChecksForDateRange } from '../services/dbService';
 import type { DailyLog, CheckRecord, Recipe, TimeSlot } from '../types';
 
@@ -201,12 +202,10 @@ export default function RecordsScreen() {
     const days = getLast30Days();
     days.forEach((date) => {
       if (date >= today) return;
-      const dow = new Date(date + 'T00:00:00').getDay();
       recipes.forEach((r) => {
         if (!r.active) return;
         if (date < r.createdAt.slice(0, 10)) return;
-        const scheduled = (r.days ?? []).length === 0 || (r.days ?? []).includes(dow);
-        if (!scheduled) return;
+        if (!isScheduledOn(r, date)) return;
         r.times.forEach((ts) => {
           r.catIds.forEach((catId) => {
             if (activeCatFilter && activeCatFilter !== catId) return;
