@@ -763,7 +763,7 @@ export default function CatsScreen() {
             style={[styles.optionChip, recipeMode === 'interval' && styles.optionChipSel]}
             onPress={() => setRecipeMode('interval')}
           >
-            <Text style={[styles.optionText, recipeMode === 'interval' && styles.optionTextSel]}>N일마다 (격일 등)</Text>
+            <Text style={[styles.optionText, recipeMode === 'interval' && styles.optionTextSel]}>직접 입력</Text>
           </TouchableOpacity>
         </View>
 
@@ -838,7 +838,7 @@ export default function CatsScreen() {
             </View>
             <Input
               testID="recipe-form-interval-input"
-              label="직접 입력 (일)"
+              label="며칠마다 (일)"
               value={recipeInterval}
               onChangeText={(t) => setRecipeInterval(t.replace(/[^0-9]/g, ''))}
               keyboardType="number-pad"
