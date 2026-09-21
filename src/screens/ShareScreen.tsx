@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useRoute } from '@react-navigation/native';
@@ -14,10 +14,10 @@ import {
   shareGetLogs, shareInsertLog,
 } from '../services/dbService';
 import { Button, Input, Card, BottomSheet } from '../components/ui';
-import { colors, spacing, radius, shadow } from '../utils/theme';
+import { TodayView } from '../components/TodayView';
+import { colors, spacing, radius } from '../utils/theme';
 import InAppBrowserBanner from '../components/InAppBrowserBanner';
-import { toDateKey, formatFullDate } from '../utils/date';
-import { isScheduledOn } from '../utils/schedule';
+import { toDateKey } from '../utils/date';
 import type { Cat, Recipe, CheckRecord, Household, TimeSlot, DailyLog } from '../types';
 import type { RootStackParamList } from '../types';
 
@@ -31,8 +31,6 @@ const MAX_LOGS = 5;
 
 type RouteProps = RouteProp<RootStackParamList, 'ShareLink'>;
 
-const TIME_LABELS: Record<TimeSlot, string> = { morning: '아침', lunch: '점심', evening: '저녁' };
-const TIME_SLOTS: TimeSlot[] = ['morning', 'lunch', 'evening'];
 const POLL_INTERVAL_MS = 30_000;
 
 export default function ShareScreen() {
@@ -201,198 +199,85 @@ export default function ShareScreen() {
     );
   }
 
-  // 활성 루틴에서 선택된 고양이 기준으로 필터링
-  const filteredRecipes = recipes.filter((r) => {
-    if (!r.active) return false;
-    if (!isScheduledOn(r, today)) return false;
-    if (activeCatId === null) return true;
-    return r.catIds.includes(activeCatId);
-  });
-
-  const grouped: Record<TimeSlot, Recipe[]> = { morning: [], lunch: [], evening: [] };
-  filteredRecipes.forEach((r) => r.times.forEach((t) => {
-    if (!grouped[t].includes(r)) grouped[t].push(r);
-  }));
-
-  // 진행도: 선택된 고양이 기준. 전체 탭에선 모든 고양이 합산.
-  let total = 0; let done = 0;
-  filteredRecipes.forEach((r) => {
-    const catsForThis = activeCatId ? [activeCatId] : r.catIds;
-    catsForThis.forEach((cid) => {
-      r.times.forEach((t) => {
-        total++;
-        if (checks[`${today}_${r.id}_${cid}_${t}`]?.done) done++;
-      });
-    });
-  });
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  // 홈과 같은 화면(TodayView). 데이터/저장만 공유 RPC 방식.
+  const selectedCatIds = activeCatId ? [activeCatId] : cats.map((c) => c.id);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <InAppBrowserBanner />
-      <View style={styles.header}>
-        <Text style={styles.logo}>CatCare</Text>
-        <View style={styles.guestBadge}>
-          <Text style={styles.guestText}>펫시터 뷰</Text>
-        </View>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.caramel} />}
-      >
-        <View style={[styles.infoCard, shadow.sm]}>
-          <Text style={styles.hhName}>{household?.name}</Text>
-          <Text style={styles.dateText}>{formatFullDate(today)}</Text>
-          <View style={styles.progressRow}>
-            <Text style={styles.progressLabel}>완료 현황</Text>
-            <Text style={styles.progressCount}>{done} / {total}</Text>
+    <>
+      <TodayView
+        date={today}
+        cats={cats}
+        recipes={recipes}
+        checks={checks}
+        selectedCatIds={selectedCatIds}
+        onSelectCat={setActiveCatId}
+        onToggle={handleToggleCheck}
+        testIDPrefix="share-check"
+        banner={<InAppBrowserBanner />}
+        headerExtra={
+          <View style={styles.guestBadge}>
+            <Text style={styles.guestText}>펫시터 뷰</Text>
           </View>
-          <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: `${pct}%` as any }]} />
-          </View>
-          {total > 0 && pct === 100 && (
-            <Text style={styles.allDoneText}>오늘 루틴을 모두 완료했어요</Text>
-          )}
-        </View>
-
-        {/* 고양이 탭 */}
-        {cats.length > 1 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              <TouchableOpacity
-                style={[styles.catChip, activeCatId === null && styles.catChipActive]}
-                onPress={() => setActiveCatId(null)}
-              >
-                <Text style={[styles.catChipText, activeCatId === null && styles.catChipTextActive]}>전체</Text>
-              </TouchableOpacity>
-              {cats.map((cat) => {
-                const sel = activeCatId === cat.id;
-                const tag = cat.tagColor ?? colors.caramel;
-                return (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={[styles.catChip, sel && { backgroundColor: tag + '22', borderColor: tag }]}
-                    onPress={() => setActiveCatId(cat.id)}
-                  >
-                    <View style={[styles.catChipDot, { backgroundColor: tag }]} />
-                    <Text style={[styles.catChipText, sel && { color: tag, fontWeight: '700' }]}>{cat.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
-        )}
-
-        {TIME_SLOTS.map((t) => {
-          if (!grouped[t].length) return null;
-          return (
-            <View key={t} style={styles.section}>
+        }
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        noCatsDesc="집사가 아직 고양이를 등록하지 않았어요"
+        emptyRoutinesMessage="오늘 적용되는 루틴이 없어요"
+        footer={
+          <>
+            {/* 메모 섹션 — 오늘 기록 조회 + 펫시터용 추가 */}
+            <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionLabel}>{TIME_LABELS[t]}</Text>
+                <Text style={styles.sectionLabel}>오늘의 메모</Text>
                 <View style={styles.sectionLine} />
               </View>
-              {grouped[t].map((recipe) => {
-                const catsForThis = activeCatId
-                  ? recipe.catIds.filter((id) => id === activeCatId)
-                  : recipe.catIds;
-                return catsForThis.map((catId) => {
-                  const cat = cats.find((c) => c.id === catId);
-                  const tag = cat?.tagColor ?? colors.caramel;
-                  const key = `${today}_${recipe.id}_${catId}_${t}`;
-                  const isDone = checks[key]?.done ?? false;
-                  return (
-                    <TouchableOpacity
-                      key={key}
-                      testID={`share-check-${recipe.id}-${catId}-${t}`}
-                      style={[
-                        styles.checkItem,
-                        isDone
-                          ? { backgroundColor: tag + '18', borderColor: tag + '60' }
-                          : { backgroundColor: '#fff', borderColor: tag + '50' },
-                        { borderLeftWidth: 3, borderLeftColor: tag },
-                      ]}
-                      onPress={() => handleToggleCheck(recipe, catId, t)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.checkBox, isDone && { backgroundColor: tag, borderColor: tag }]}>
-                        {isDone && <Text style={{ color: '#fff', fontSize: 13 }}>✓</Text>}
-                      </View>
-                      <View style={styles.checkText}>
-                        <Text style={[styles.checkTitle, isDone && styles.checkTitleDone]}>{recipe.name}</Text>
-                        {cat && <Text style={styles.checkMeta}>{cat.name}</Text>}
-                        {checks[key]?.doneAt && (
-                          <Text style={styles.doneTime}>
-                            {new Date(checks[key].doneAt!).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 완료
+              {logs.length > 0 && logs.map((log) => {
+                const logCat = log.catId ? cats.find((c) => c.id === log.catId) : null;
+                return (
+                  <Card key={log.id} style={{ marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                      {log.tagColor && (
+                        <View style={[styles.logTagBadge, { backgroundColor: log.tagColor + '20', borderColor: log.tagColor }]}>
+                          <View style={[styles.logTagDot, { backgroundColor: log.tagColor }]} />
+                          <Text style={[styles.logTagText, { color: log.tagColor }]}>
+                            {TAG_OPTIONS.find((t) => t.value === log.tagColor)?.label ?? ''}
                           </Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                });
+                        </View>
+                      )}
+                      {logCat && (
+                        <View style={[styles.logTagBadge, { backgroundColor: (logCat.tagColor ?? colors.caramel) + '20', borderColor: logCat.tagColor ?? colors.caramel }]}>
+                          <View style={[styles.logTagDot, { backgroundColor: logCat.tagColor ?? colors.caramel }]} />
+                          <Text style={[styles.logTagText, { color: logCat.tagColor ?? colors.caramel }]}>{logCat.name}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.logText}>{log.text}</Text>
+                  </Card>
+                );
               })}
+              {logs.length < MAX_LOGS ? (
+                <Button
+                  testID="share-log-add-button"
+                  label="+ 메모 추가"
+                  variant="secondary"
+                  size="sm"
+                  onPress={openLogModal}
+                  style={{ marginTop: 4 }}
+                />
+              ) : (
+                <Text style={styles.logLimitText}>오늘 메모가 가득 찼습니다 ({MAX_LOGS}/{MAX_LOGS})</Text>
+              )}
             </View>
-          );
-        })}
 
-        {filteredRecipes.length === 0 && (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>등록된 루틴이 없습니다</Text>
-          </View>
-        )}
-
-        {/* 메모 섹션 — 오늘 기록 조회 + 펫시터용 추가 */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>오늘의 메모</Text>
-            <View style={styles.sectionLine} />
-          </View>
-          {logs.length > 0 && logs.map((log) => {
-            const logCat = log.catId ? cats.find((c) => c.id === log.catId) : null;
-            return (
-              <Card key={log.id} style={{ marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                  {log.tagColor && (
-                    <View style={[styles.logTagBadge, { backgroundColor: log.tagColor + '20', borderColor: log.tagColor }]}>
-                      <View style={[styles.logTagDot, { backgroundColor: log.tagColor }]} />
-                      <Text style={[styles.logTagText, { color: log.tagColor }]}>
-                        {TAG_OPTIONS.find((t) => t.value === log.tagColor)?.label ?? ''}
-                      </Text>
-                    </View>
-                  )}
-                  {logCat && (
-                    <View style={[styles.logTagBadge, { backgroundColor: (logCat.tagColor ?? colors.caramel) + '20', borderColor: logCat.tagColor ?? colors.caramel }]}>
-                      <View style={[styles.logTagDot, { backgroundColor: logCat.tagColor ?? colors.caramel }]} />
-                      <Text style={[styles.logTagText, { color: logCat.tagColor ?? colors.caramel }]}>{logCat.name}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.logText}>{log.text}</Text>
-              </Card>
-            );
-          })}
-          {logs.length < MAX_LOGS ? (
-            <Button
-              testID="share-log-add-button"
-              label="+ 메모 추가"
-              variant="secondary"
-              size="sm"
-              onPress={openLogModal}
-              style={{ marginTop: 4 }}
-            />
-          ) : (
-            <Text style={styles.logLimitText}>오늘 메모가 가득 찼습니다 ({MAX_LOGS}/{MAX_LOGS})</Text>
-          )}
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            이 화면은 공유 링크를 통해 접근한 펫시터 전용 뷰입니다.{'\n'}
-            체크·메모 내역은 집사에게 전달됩니다.
-          </Text>
-        </View>
-      </ScrollView>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                이 화면은 공유 링크를 통해 접근한 펫시터 전용 뷰입니다.{'\n'}
+                체크·메모 내역은 집사에게 전달됩니다.
+              </Text>
+            </View>
+          </>
+        }
+      />
 
       <BottomSheet
         visible={logModalVisible}
@@ -470,7 +355,7 @@ export default function ShareScreen() {
           />
         </View>
       </BottomSheet>
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -479,64 +364,15 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream, padding: 32 },
   errorTitle: { fontSize: 18, fontWeight: '700', color: colors.charcoal, marginBottom: 8 },
   errorDesc: { fontSize: 13, color: colors.muted, textAlign: 'center', lineHeight: 22 },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: 1.5, borderBottomColor: colors.border,
-  },
-  logo: { fontSize: 20, fontWeight: '800', color: colors.caramel },
   guestBadge: {
     backgroundColor: colors.sand, paddingHorizontal: 12, paddingVertical: 4,
     borderRadius: radius.full, borderWidth: 1, borderColor: colors.border,
   },
   guestText: { fontSize: 12, color: colors.brownMid },
-  content: { padding: spacing.lg, paddingBottom: 40 },
-  infoCard: {
-    backgroundColor: colors.cream, borderRadius: radius.lg,
-    borderWidth: 1.5, borderColor: colors.border,
-    padding: spacing.md, marginBottom: spacing.md,
-  },
-  hhName: { fontSize: 17, fontWeight: '700', color: colors.charcoal, marginBottom: 4 },
-  dateText: { fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
-  progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  progressLabel: { fontSize: 13, color: colors.brownMid },
-  progressCount: { fontSize: 13, color: colors.caramel, fontWeight: '700' },
-  progressBg: { height: 6, backgroundColor: colors.sand, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: 6, backgroundColor: colors.caramel, borderRadius: 3 },
-  allDoneText: { fontSize: 13, color: colors.sage, fontWeight: '600', marginTop: 10, textAlign: 'center' },
-  catChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 7, paddingHorizontal: 12,
-    backgroundColor: colors.cream, borderRadius: radius.full,
-    borderWidth: 1.5, borderColor: colors.border,
-  },
-  catChipActive: {
-    backgroundColor: colors.caramel + '18', borderColor: colors.caramel,
-  },
-  catChipDot: { width: 8, height: 8, borderRadius: 4 },
-  catChipText: { fontSize: 12, color: colors.muted },
-  catChipTextActive: { color: colors.caramel, fontWeight: '700' },
   section: { marginBottom: spacing.lg },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   sectionLabel: { fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
   sectionLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  checkItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: spacing.md, borderRadius: radius.md,
-    borderWidth: 1.5, marginBottom: 8, ...shadow.sm,
-  },
-  checkBox: {
-    width: 24, height: 24, borderRadius: 8,
-    borderWidth: 2, borderColor: colors.border,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff',
-  },
-  checkText: { flex: 1 },
-  checkTitle: { fontSize: 15, color: colors.charcoal },
-  checkTitleDone: { textDecorationLine: 'line-through', color: colors.muted },
-  checkMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
-  doneTime: { fontSize: 11, color: colors.sage, marginTop: 4 },
-  empty: { alignItems: 'center', paddingVertical: 48 },
-  emptyText: { fontSize: 14, color: colors.muted },
   footer: {
     marginTop: spacing.lg, backgroundColor: colors.warnBg,
     borderRadius: radius.md, padding: spacing.md,

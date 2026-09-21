@@ -81,7 +81,7 @@ if (typeof window !== 'undefined' && window.location) {
 
 `src/services/supabase.ts`에서 `createClient`의 `auth.lock`을 **단일 탭 in-memory promise chain**으로 명시 지정한 상태. 기본값(`navigator.locks` 기반)은 새로고침 직후 stale refresh token 갱신이 무한 대기하면서 lock을 잡아둬서 **`onAuthStateChange`의 INITIAL_SESSION emit, `signOut`, 새 `signInWithPassword`까지 전부 hang**시키는 회귀가 있어 우회. multi-tab 동기화는 포기하는 trade-off (CatCare는 PWA형 단일 탭 사용이라 무영향).
 
-**다음에 비슷한 증상이 다시 보이면** — 새로고침 후 로딩 화면이 영원히 안 풀림 / 로그인 버튼 무한 hang / `clearLocalSession()`이 resolve 안 함 — **AppNavigator의 fallback timing이나 getUserById 재시도를 만지지 말 것**. 그건 다 증상이고 근본 원인은 lock. `supabase.ts`의 `lock` 옵션부터 의심하고, supabase-js 업그레이드 후라면 lock 시그니처 호환성도 확인할 것.
+**다음에 비슷한 증상이 다시 보이면** — 새로고침 후 로딩 화면이 영원히 안 풀림 / 로그인 버튼 무한 hang / `signOut`이 resolve 안 함(과거 "로그인 문제 해결" 버튼은 제거됨) — **AppNavigator의 fallback timing이나 getUserById 재시도를 만지지 말 것**. 그건 다 증상이고 근본 원인은 lock. `supabase.ts`의 `lock` 옵션부터 의심하고, supabase-js 업그레이드 후라면 lock 시그니처 호환성도 확인할 것.
 
 ### Supabase Auth — `onAuthStateChange` 콜백에서 supabase 호출 `await` 금지 (2026-09)
 

@@ -4,8 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { Text, View, TouchableOpacity, Platform } from 'react-native';
-import { clearLocalSession } from '../services/authService';
+import { View, Platform } from 'react-native';
 
 import Logo from '../components/Logo';
 import AuthScreen from '../screens/AuthScreen';
@@ -77,23 +76,18 @@ export default function AppNavigator() {
   const shareToken = getShareTokenFromPath();
 
   const [authLoaded, setAuthLoaded] = useState(false);
-  const [showReset, setShowReset] = useState(false);
   const dataUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (shareToken) return; // 공유 뷰에서는 auth/데이터 구독 스킵
-    // 3초 후 "로그인 문제 해결" 버튼 노출, 10초 후 로딩 화면 해제(세션은 보존).
-    // 청소는 부활 → 제거. supabase auth.lock을 in-memory chain으로 교체한 이후
-    // hang 위험이 사라졌고, 진행 중일 수 있는 refresh를 끊지 않기 위해 setAuthLoaded만.
-    // 늦은 응답이 와도 setUser(...)로 자동 복구되며, 진짜 stale 토큰은 "로그인 문제
-    // 해결" 버튼이 처리.
-    const resetTimer = setTimeout(() => setShowReset(true), 3000);
+    // 10초 안에 auth 결과가 안 오면 로딩 화면을 해제해 로그인 화면을 보여준다(세션은 보존).
+    // 진행 중일 수 있는 refresh를 끊지 않기 위해 setAuthLoaded만 하며, 늦은 응답이 와도
+    // setUser(...)로 자동 복구된다.
     const fallback = setTimeout(() => {
       setAuthLoaded(true);
     }, 10000);
 
     const unsubAuth = subscribeToAuthState(async (u) => {
-      clearTimeout(resetTimer);
       clearTimeout(fallback);
 
       // 이전 Realtime 구독 정리 (중복 채널 방지)
@@ -136,7 +130,6 @@ export default function AppNavigator() {
     });
 
     return () => {
-      clearTimeout(resetTimer);
       clearTimeout(fallback);
       unsubAuth();
       if (dataUnsubRef.current) {
@@ -160,31 +153,11 @@ export default function AppNavigator() {
     );
   }
 
+  // 세션 복원 중에는 로고만 보여준다(로그인 화면이 잠깐 비쳤다 홈으로 바뀌는 깜빡임 방지).
   if (!authLoaded) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cream }}>
         <Logo height={56} />
-        <Text style={{ color: colors.muted, marginTop: 16 }}>로딩 중...</Text>
-        {showReset && (
-          <TouchableOpacity
-            style={{
-              marginTop: 32, paddingVertical: 10, paddingHorizontal: 24,
-              borderRadius: 20, borderWidth: 1.5, borderColor: colors.caramel,
-            }}
-            onPress={async () => {
-              await clearLocalSession();
-              // SIGNED_OUT 이벤트는 auth lock 안에서 발생해 멈출 수 있으므로 기다리지 않고
-              // 직접 로그인 화면으로 보낸다. 웹은 추가로 reload로 멈춘 클라이언트 상태를 초기화.
-              setUser(null);
-              setAuthLoaded(true);
-              if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-                window.location.reload();
-              }
-            }}
-          >
-            <Text style={{ color: colors.caramel, fontSize: 14 }}>로그인 문제 해결</Text>
-          </TouchableOpacity>
-        )}
       </View>
     );
   }

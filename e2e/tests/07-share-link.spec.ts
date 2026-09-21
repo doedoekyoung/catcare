@@ -8,6 +8,14 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+// 앱(toDateKey)은 로컬 날짜로 체크를 저장한다. UTC 날짜(toISOString)를 쓰면 한국 시간 0~9시에 어긋난다.
+function localDateKey(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // 테스트 계정 household의 share_token을 새로 발급하고 cat/recipe id를 가져옴.
 async function prepareShareContext() {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -93,7 +101,7 @@ test.describe.serial('Share Link (펫시터 뷰)', () => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
 
     // 깨끗한 상태에서 시작
     await admin.from('check_records').delete().eq('household_id', hhId).eq('date', today);
@@ -141,7 +149,7 @@ test.describe.serial('Share Link (펫시터 뷰)', () => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateKey();
 
     // 깨끗한 상태에서 시작 (펫시터가 오늘 작성한 메모만 검증)
     await admin.from('daily_logs').delete().eq('household_id', hhId).eq('date', today);
