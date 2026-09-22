@@ -16,6 +16,7 @@ import {
 import { Button, Input, Card, BottomSheet } from '../components/ui';
 import { TodayView } from '../components/TodayView';
 import { colors, spacing, radius } from '../utils/theme';
+import uuid from 'react-native-uuid';
 import InAppBrowserBanner from '../components/InAppBrowserBanner';
 import { toDateKey } from '../utils/date';
 import type { Cat, Recipe, CheckRecord, Household, TimeSlot, DailyLog } from '../types';
@@ -130,9 +131,7 @@ export default function ShareScreen() {
     }
     setSaving(true);
     try {
-      const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const id = uuid.v4();
       await shareInsertLog(token, {
         id, date: today, catId: logCatId, text, tagColor: logTagColor,
       });

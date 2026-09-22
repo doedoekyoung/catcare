@@ -45,3 +45,23 @@ if [ ${#FAILED[@]} -gt 0 ]; then
 fi
 
 echo "✅ 플랫폼 가드 OK — 웹 전용 globals이 모두 가드되어 있음"
+
+# ── crypto.randomUUID (반대 방향 함정) ──────────────────────────────────────
+# 위 검사와 반대 케이스: 이건 네이티브(Hermes)에 전역 crypto가 없어 실패하는데
+# 웹에는 있어서 여기선 안 잡힘 (2026-09 메모 기능 회귀: crypto.randomUUID()를
+# 가드 없이 호출해 네이티브 빌드에서만 저장이 조용히 실패).
+# 가드로 우회하지 말고 react-native-uuid(uuid.v4())로 교체할 것 — 이미 의존성에 있음.
+UUID_HITS=$(grep -rnE 'crypto\.randomUUID' src/ \
+  --include='*.ts' --include='*.tsx' \
+  2>/dev/null | grep -vE '//\s' | grep -vE '^\s*\*' || true)
+
+if [ -n "$UUID_HITS" ]; then
+  echo ""
+  echo "❌ crypto.randomUUID() 사용 감지 — RN/Hermes엔 전역 crypto가 없어 네이티브에서 실패:"
+  echo "$UUID_HITS"
+  echo ""
+  echo "대신 사용:"
+  echo "  import uuid from 'react-native-uuid';"
+  echo "  const id = uuid.v4();"
+  exit 1
+fi

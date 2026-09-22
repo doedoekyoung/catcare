@@ -8,6 +8,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import uuid from 'react-native-uuid';
 import { useStore } from '../store/useStore';
 import { upsertCheck, upsertLog, uploadPhoto, deleteLog } from '../services/dbService';
 import { Card, Input, Button, BottomSheet, Tag } from '../components/ui';
@@ -78,7 +79,8 @@ export default function LogDetailScreen() {
     if (!logText.trim() || !household || !user) return;
     const existing = editingLogId ? dayLogs.find((l) => l.id === editingLogId) : null;
     const log: DailyLog = {
-      id: existing?.id ?? crypto.randomUUID(),
+      // Hermes(RN)엔 전역 crypto가 없어 crypto.randomUUID()가 실패 → 크로스플랫폼 라이브러리 사용
+      id: existing?.id ?? uuid.v4(),
       date,
       text: logText.trim(),
       householdId: household.id,

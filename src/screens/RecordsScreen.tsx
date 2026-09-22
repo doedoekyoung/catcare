@@ -12,6 +12,7 @@ import { RoutineChecklist } from '../components/RoutineChecklist';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 import { toDateKey, getLast30Days } from '../utils/date';
 import { isScheduledOn } from '../utils/schedule';
+import uuid from 'react-native-uuid';
 import { getLogsForDateRange, upsertLog, upsertCheck, getChecksForDateRange } from '../services/dbService';
 import type { DailyLog, CheckRecord, Recipe, TimeSlot } from '../types';
 
@@ -151,7 +152,8 @@ export default function RecordsScreen() {
     if (!logText.trim() || !household || !user) return;
     const existing = editingLogId ? allLogs.find((l) => l.id === editingLogId) : null;
     const log: DailyLog = {
-      id: existing?.id ?? crypto.randomUUID(),
+      // Hermes(RN)엔 전역 crypto가 없어 crypto.randomUUID()가 실패 → 크로스플랫폼 라이브러리 사용
+      id: existing?.id ?? uuid.v4(),
       date: viewDate,
       text: logText.trim(),
       tagColor: logTagColor ?? undefined,
@@ -378,7 +380,7 @@ export default function RecordsScreen() {
   };
   const selectedLogs = selectedCalDate ? (logsByDate[selectedCalDate] ?? []) : [];
 
-  // 달력 날짜 → 쓰기 탭으로 점프
+  // 달력 날짜 → 메모 탭으로 점프
   const jumpToWrite = (dateKey: string) => {
     setViewDate(dateKey);
     setActiveCatFilter(null);
@@ -398,7 +400,7 @@ export default function RecordsScreen() {
           style={[styles.tab, activeTab === 'write' && styles.tabActive]}
           onPress={() => setActiveTab('write')}
         >
-          <Text style={[styles.tabText, activeTab === 'write' && styles.tabTextActive]}>쓰기</Text>
+          <Text style={[styles.tabText, activeTab === 'write' && styles.tabTextActive]}>메모</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID="records-tab-calendar"
@@ -409,7 +411,7 @@ export default function RecordsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Cat filter chips — 쓰기/달력 공통 */}
+      {/* Cat filter chips — 메모/달력 공통 */}
       {cats.length > 0 && (
         <ScrollView
           horizontal
@@ -813,7 +815,7 @@ export default function RecordsScreen() {
                 <Text style={styles.selectedLogEmpty}>이 날의 메모가 없어요</Text>
               )}
               <Button
-                label="이 날짜로 쓰기 열기"
+                label="이 날짜로 메모 열기"
                 variant="ghost"
                 size="sm"
                 onPress={() => jumpToWrite(selectedCalDate)}
@@ -825,7 +827,7 @@ export default function RecordsScreen() {
           {logs.length === 0 && (
             <EmptyState
               title="아직 메모가 없어요"
-              desc="쓰기 탭에서 오늘의 메모를 작성해보세요"
+              desc="메모 탭에서 작성해보세요"
             />
           )}
         </ScrollView>
