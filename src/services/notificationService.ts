@@ -206,7 +206,12 @@ export async function setBadgeCount(remaining: number): Promise<void> {
         sticky: true,      // 스와이프로 안 지워짐 — 실제로 다 끝나야만 사라져야 배지가 신뢰됨
         autoDismiss: false,
       },
-      trigger: { channelId: STATUS_CHANNEL_ID }, // 즉시 표시, 이 채널로
+      // { channelId }만 있는 트리거는 네이티브에서 ChannelAwareTrigger로 변환되는데,
+      // 이건 SchedulableNotificationTrigger가 아니라서 "does not have a schedulable
+      // trigger. Refusing to schedule." 예외가 난다(실기기 진단 정보로 확인함).
+      // seconds 트리거(TimeIntervalTrigger)는 SchedulableNotificationTrigger를 구현하므로
+      // 이걸로 채널을 지정 — 1초 뒤 실행되어 사실상 즉시 표시.
+      trigger: { seconds: 1, channelId: STATUS_CHANNEL_ID },
     });
     await recordDebug({ ...base, permission, outcome: 'success', detail: `알림 예약됨 (id=${id})` });
   } catch (e: any) {

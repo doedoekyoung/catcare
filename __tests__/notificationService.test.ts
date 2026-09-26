@@ -222,7 +222,9 @@ describe('배지(오늘 남은 할 일 수)', () => {
       expect(req.content.badge).toBe(3);
       expect(req.content.sticky).toBe(true); // 스와이프로 안 지워짐 — 배지 신뢰성 확보
       expect(req.content.sound).toBe(false); // 조용히 — 매번 소리/진동 없음
-      expect(req.trigger).toEqual({ channelId: 'daily-status' });
+      // { channelId }만 있는 트리거는 네이티브에서 "schedulable하지 않다"며 거부됨(실기기 확인).
+      // seconds를 가진 TimeIntervalTrigger라야 스케줄 가능 — 그래서 반드시 seconds가 있어야 함.
+      expect(req.trigger).toEqual({ seconds: 1, channelId: 'daily-status' });
     });
 
     test('0이면 새로 예약하지 않고 기존 알림을 지움', async () => {
