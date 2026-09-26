@@ -59,6 +59,53 @@ beforeEach(() => {
   mockCurrentOS = 'ios';
 });
 
+// _lastDebug는 notificationService 모듈 레벨 변수라 이 파일 안의 모든 테스트가 공유한다
+// (resetModules를 안 쓰므로). 그래서 "저장된 값 없음" 케이스는 setBadgeCount를 한 번도
+// 호출하지 않은 이 시점(파일의 첫 describe)에서만 검증할 수 있다 — 반드시 최상단에 둘 것.
+describe('배지 진단 정보 — 실기기에서 실패 원인을 바로 볼 수 있게 기록', () => {
+  test('저장된 값이 없으면 null', async () => {
+    expect(await svc.getBadgeDebugInfo()).toBeNull();
+  });
+
+  test('성공 시 outcome=success, 알림 id가 detail에 남음', async () => {
+    mockCurrentOS = 'android';
+    mockScheduleNotificationAsync.mockResolvedValueOnce('abc-123');
+    await svc.setBadgeCount(3);
+
+    const info = await svc.getBadgeDebugInfo();
+    expect(info).toMatchObject({
+      platform: 'android', remaining: 3, outcome: 'success', permission: 'granted',
+    });
+    expect(info.detail).toContain('abc-123');
+  });
+
+  test('실패 시 outcome=error, 실제 에러 메시지가 그대로 detail에 남음(삼켜지지 않음)', async () => {
+    mockCurrentOS = 'android';
+    mockScheduleNotificationAsync.mockImplementationOnce(() => Promise.reject(new Error('SecurityException: badge denied')));
+    await svc.setBadgeCount(2);
+
+    const info = await svc.getBadgeDebugInfo();
+    expect(info).toMatchObject({ outcome: 'error' });
+    expect(info.detail).toContain('SecurityException: badge denied');
+  });
+
+  test('권한이 거부 상태면 permission 필드에 그대로 반영', async () => {
+    mockCurrentOS = 'ios';
+    mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'denied' });
+    await svc.setBadgeCount(1);
+
+    const info = await svc.getBadgeDebugInfo();
+    expect(info.permission).toBe('denied');
+  });
+
+  test('웹은 skipped-web으로 기록', async () => {
+    mockCurrentOS = 'web';
+    await svc.setBadgeCount(5);
+    const info = await svc.getBadgeDebugInfo();
+    expect(info).toMatchObject({ outcome: 'skipped-web', permission: 'n/a' });
+  });
+});
+
 describe('플랫폼별 동작', () => {
   test('웹에서는 모두 no-op — 예약/취소/on-off 조회 모두 native API를 부르지 않음', async () => {
     mockCurrentOS = 'web';

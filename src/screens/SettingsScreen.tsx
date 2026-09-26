@@ -36,7 +36,7 @@ function buildShareUrl(token: string): string {
   return `${PROD_WEB_ORIGIN}/share/${token}`;
 }
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useStore } from '../store/useStore';
+import { useStore, selectCompletionRate } from '../store/useStore';
 import { signOut } from '../services/authService';
 import {
   regenerateShareToken,
@@ -48,13 +48,15 @@ import {
 } from '../services/dbService';
 import {
   areDailyRemindersEnabled, setDailyRemindersEnabled, DAILY_REMINDER_HOURS,
+  setBadgeCount, getBadgeDebugInfo, type BadgeDebugInfo,
 } from '../services/notificationService';
+import { toDateKey } from '../utils/date';
 import type { User } from '../types';
 import { Button, Card } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
 
 export default function SettingsScreen() {
-  const { user, household, setUser, setHousehold } = useStore();
+  const { user, household, cats, recipes, checks, setUser, setHousehold } = useStore();
   const [shareLoading, setShareLoading] = useState(false);
 
   // 일일 알림 (네이티브 전용 — 웹은 예약 알림 미지원)
@@ -69,6 +71,25 @@ export default function SettingsScreen() {
       await setDailyRemindersEnabled(value);
     } catch {
       setRemindersEnabled(!value); // 실패 시 되돌림
+    }
+  };
+
+  // 배지 진단 정보 — 임시 디버깅용. 배지가 안 뜰 때 권한/실패 원인을 화면에서 바로 확인.
+  const [badgeDebug, setBadgeDebug] = useState<BadgeDebugInfo | null>(null);
+  const [badgeChecking, setBadgeChecking] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    getBadgeDebugInfo().then(setBadgeDebug);
+  }, []);
+  const handleRecheckBadge = async () => {
+    setBadgeChecking(true);
+    try {
+      const catIds = cats.map((c) => c.id);
+      const { done, total } = selectCompletionRate(recipes, checks, toDateKey(), catIds);
+      await setBadgeCount(total - done);
+      setBadgeDebug(await getBadgeDebugInfo());
+    } finally {
+      setBadgeChecking(false);
     }
   };
 
@@ -316,6 +337,37 @@ export default function SettingsScreen() {
               trackColor={{ true: colors.caramel }}
             />
           </View>
+
+          {/* 배지 진단 정보 — 임시. 배지가 안 뜰 때 원인(권한/에러)을 여기서 바로 확인 */}
+          <Card style={{ backgroundColor: colors.cream, marginTop: 8 }}>
+            <Text style={styles.shareTitle}>배지 진단 정보</Text>
+            {badgeDebug ? (
+              <>
+                <Text style={styles.debugLine}>플랫폼: {badgeDebug.platform} (OS {badgeDebug.osVersion})</Text>
+                <Text style={styles.debugLine}>알림 권한: {badgeDebug.permission}</Text>
+                <Text style={styles.debugLine}>남은 할 일 수: {badgeDebug.remaining}</Text>
+                <Text style={[
+                  styles.debugLine,
+                  { color: badgeDebug.outcome === 'error' ? colors.terracotta : colors.sage, fontWeight: '700' },
+                ]}>
+                  결과: {badgeDebug.outcome === 'success' ? '성공' : badgeDebug.outcome === 'error' ? '실패' : '건너뜀(웹)'}
+                </Text>
+                <Text style={styles.debugLine}>상세: {badgeDebug.detail}</Text>
+                <Text style={styles.debugLine}>시각: {new Date(badgeDebug.timestamp).toLocaleString('ko-KR')}</Text>
+              </>
+            ) : (
+              <Text style={styles.debugLine}>아직 기록 없음 — 아래 버튼으로 확인해보세요.</Text>
+            )}
+            <Button
+              testID="badge-debug-recheck-button"
+              label={badgeChecking ? '확인 중...' : '지금 다시 확인'}
+              variant="secondary"
+              size="sm"
+              onPress={handleRecheckBadge}
+              loading={badgeChecking}
+              style={{ marginTop: spacing.sm }}
+            />
+          </Card>
         </>)}
 
         {/* 이름 편집 모달 */}
@@ -473,6 +525,7 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 12, color: colors.muted, marginTop: 2 },
   rowArrow: { fontSize: 20, color: colors.muted },
   shareTitle: { fontSize: 15, fontWeight: '600', color: colors.charcoal, marginBottom: 6 },
+  debugLine: { fontSize: 12, color: colors.muted, marginBottom: 3, fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: undefined }) },
   shareDesc: { fontSize: 13, color: colors.muted, lineHeight: 20, marginBottom: spacing.sm },
   tokenBox: {
     backgroundColor: colors.sand, borderRadius: radius.sm,
