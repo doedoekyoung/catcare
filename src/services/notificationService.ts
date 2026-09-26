@@ -99,10 +99,57 @@ export async function cancelDailyReminders(): Promise<void> {
 // (체크 토글, 앱 포그라운드 복귀 등) AppNavigator가 이 함수를 호출해 매번 다시 계산한다.
 // 그래서 앱이 완전히 종료된 채로 알림만 울리는 동안에는 갱신되지 않고, 다음에 앱을 열 때
 // (또는 포그라운드로 돌아올 때) 그 시점 기준 값으로 보정된다.
-export async function setBadgeCount(count: number): Promise<void> {
+//
+// iOS: Notifications.setBadgeCountAsync가 그대로 표준 APNs 배지 API라 신뢰할 수 있다.
+//
+// Android: 순수 API로만 세팅한 배지값(ShortcutBadger 경유)은 삼성 One UI 6.1(Android 14)
+// 등 최신 기기에서 무시되고, 배지가 대신 "트레이에 실제로 떠 있는 알림 개수/번호"를
+// 따른다(https://github.com/expo/expo/discussions/35109). 그래서 안드로이드는 조용한
+// 지속 알림 하나를 유지하며 그 알림의 badge(=네이티브 setNumber)로 배지를 반영한다.
+// 다 끝나면(count 0) 알림을 지워 배지도 함께 사라지게 한다.
+const STATUS_NOTIFICATION_ID = 'daily-status-badge';
+const STATUS_CHANNEL_ID = 'daily-status';
+
+async function ensureStatusChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(STATUS_CHANNEL_ID, {
+    name: '오늘 남은 할 일',
+    importance: Notifications.AndroidImportance.LOW, // 소리·팝업 없이 트레이에만 조용히
+  });
+}
+
+export async function setBadgeCount(remaining: number): Promise<void> {
   if (Platform.OS === 'web') return;
+  const n = Math.max(0, remaining);
+
+  if (Platform.OS === 'ios') {
+    try {
+      await Notifications.setBadgeCountAsync(n);
+    } catch {}
+    return;
+  }
+
+  // Android
+  if (n === 0) {
+    try {
+      await Notifications.dismissNotificationAsync(STATUS_NOTIFICATION_ID);
+    } catch {}
+    return;
+  }
   try {
-    await Notifications.setBadgeCountAsync(Math.max(0, count));
+    await ensureStatusChannel();
+    await Notifications.scheduleNotificationAsync({
+      identifier: STATUS_NOTIFICATION_ID, // 같은 id로 다시 예약 → 쌓이지 않고 교체됨
+      content: {
+        title: '오늘 할 일이 남아있어요',
+        body: `아직 ${n}개의 루틴이 남았어요`,
+        badge: n,
+        sound: false,
+        sticky: true,      // 스와이프로 안 지워짐 — 실제로 다 끝나야만 사라져야 배지가 신뢰됨
+        autoDismiss: false,
+      },
+      trigger: { channelId: STATUS_CHANNEL_ID }, // 즉시 표시, 이 채널로
+    });
   } catch {}
 }
 

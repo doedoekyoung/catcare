@@ -28,6 +28,7 @@ const mockSetNotificationChannelAsync = jest.fn(() => Promise.resolve());
 const mockGetPermissionsAsync = jest.fn(() => Promise.resolve({ status: 'granted' }));
 const mockRequestPermissionsAsync = jest.fn(() => Promise.resolve({ status: 'granted' }));
 const mockSetBadgeCountAsync = jest.fn(() => Promise.resolve(true));
+const mockDismissNotificationAsync = jest.fn(() => Promise.resolve());
 
 jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
@@ -38,7 +39,8 @@ jest.mock('expo-notifications', () => ({
   getAllScheduledNotificationsAsync: mockGetAllScheduledNotificationsAsync,
   setNotificationChannelAsync: mockSetNotificationChannelAsync,
   setBadgeCountAsync: mockSetBadgeCountAsync,
-  AndroidImportance: { DEFAULT: 3 },
+  dismissNotificationAsync: mockDismissNotificationAsync,
+  AndroidImportance: { DEFAULT: 3, LOW: 2 },
 }));
 
 const mockStore = new Map<string, string>();
@@ -133,20 +135,67 @@ describe('배지(오늘 남은 할 일 수)', () => {
     mockCurrentOS = 'web';
     await svc.setBadgeCount(3);
     expect(mockSetBadgeCountAsync).not.toHaveBeenCalled();
+    expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
   });
 
-  test('네이티브에서는 그대로 전달', async () => {
-    await svc.setBadgeCount(3);
-    expect(mockSetBadgeCountAsync).toHaveBeenCalledWith(3);
+  describe('iOS — 표준 APNs 배지 API 그대로 사용', () => {
+    test('그대로 전달', async () => {
+      mockCurrentOS = 'ios';
+      await svc.setBadgeCount(3);
+      expect(mockSetBadgeCountAsync).toHaveBeenCalledWith(3);
+      expect(mockScheduleNotificationAsync).not.toHaveBeenCalled(); // 지속 알림 방식은 안드로이드 전용
+    });
+
+    test('음수는 0으로 클램프 — 계산 순서에 따라 done > total이 될 수 있음', async () => {
+      mockCurrentOS = 'ios';
+      await svc.setBadgeCount(-2);
+      expect(mockSetBadgeCountAsync).toHaveBeenCalledWith(0);
+    });
+
+    test('setBadgeCountAsync가 실패해도 던지지 않음', async () => {
+      mockCurrentOS = 'ios';
+      mockSetBadgeCountAsync.mockImplementationOnce(() => Promise.reject(new Error('unsupported')));
+      await expect(svc.setBadgeCount(1)).resolves.toBeUndefined();
+    });
   });
 
-  test('음수는 0으로 클램프 — 계산 순서에 따라 done > total이 될 수 있음', async () => {
-    await svc.setBadgeCount(-2);
-    expect(mockSetBadgeCountAsync).toHaveBeenCalledWith(0);
-  });
+  describe('Android — 조용한 지속 알림으로 setNumber 반영 (ShortcutBadger는 One UI 6.1+에서 무시됨)', () => {
+    test('남은 게 있으면 채널을 만들고 고정 identifier로 알림을 예약(=교체)', async () => {
+      mockCurrentOS = 'android';
+      await svc.setBadgeCount(3);
 
-  test('setBadgeCountAsync가 실패해도 던지지 않음', async () => {
-    mockSetBadgeCountAsync.mockImplementationOnce(() => Promise.reject(new Error('launcher unsupported')));
-    await expect(svc.setBadgeCount(1)).resolves.toBeUndefined();
+      expect(mockSetBadgeCountAsync).not.toHaveBeenCalled(); // 안드로이드는 이 경로를 안 씀
+      expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
+        'daily-status',
+        expect.objectContaining({ importance: 2 })
+      );
+      expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(1);
+      const [req]: any[] = mockScheduleNotificationAsync.mock.calls[0];
+      expect(req.identifier).toBe('daily-status-badge'); // 같은 id → 쌓이지 않고 교체
+      expect(req.content.badge).toBe(3);
+      expect(req.content.sticky).toBe(true); // 스와이프로 안 지워짐 — 배지 신뢰성 확보
+      expect(req.content.sound).toBe(false); // 조용히 — 매번 소리/진동 없음
+      expect(req.trigger).toEqual({ channelId: 'daily-status' });
+    });
+
+    test('0이면 새로 예약하지 않고 기존 알림을 지움', async () => {
+      mockCurrentOS = 'android';
+      await svc.setBadgeCount(0);
+
+      expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
+      expect(mockDismissNotificationAsync).toHaveBeenCalledWith('daily-status-badge');
+    });
+
+    test('음수도 0 취급 — 알림을 지움', async () => {
+      mockCurrentOS = 'android';
+      await svc.setBadgeCount(-1);
+      expect(mockDismissNotificationAsync).toHaveBeenCalledWith('daily-status-badge');
+    });
+
+    test('예약 실패해도 던지지 않음', async () => {
+      mockCurrentOS = 'android';
+      mockScheduleNotificationAsync.mockImplementationOnce(() => Promise.reject(new Error('fail')));
+      await expect(svc.setBadgeCount(2)).resolves.toBeUndefined();
+    });
   });
 });
