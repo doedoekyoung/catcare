@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share, Platform,
-  Modal, TextInput, ActivityIndicator, Pressable,
+  Modal, TextInput, ActivityIndicator, Pressable, Switch,
 } from 'react-native';
 
 function webConfirm(title: string, message: string, onConfirm: () => void, confirmLabel = '확인') {
@@ -46,6 +46,9 @@ import {
   getUsersByIds,
   upsertUser,
 } from '../services/dbService';
+import {
+  areDailyRemindersEnabled, setDailyRemindersEnabled, DAILY_REMINDER_HOURS,
+} from '../services/notificationService';
 import type { User } from '../types';
 import { Button, Card } from '../components/ui';
 import { colors, spacing, radius, shadow } from '../utils/theme';
@@ -53,6 +56,21 @@ import { colors, spacing, radius, shadow } from '../utils/theme';
 export default function SettingsScreen() {
   const { user, household, setUser, setHousehold } = useStore();
   const [shareLoading, setShareLoading] = useState(false);
+
+  // 일일 알림 (네이티브 전용 — 웹은 예약 알림 미지원)
+  const [remindersEnabled, setRemindersEnabled] = useState(true);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    areDailyRemindersEnabled().then(setRemindersEnabled);
+  }, []);
+  const handleToggleReminders = async (value: boolean) => {
+    setRemindersEnabled(value); // optimistic
+    try {
+      await setDailyRemindersEnabled(value);
+    } catch {
+      setRemindersEnabled(!value); // 실패 시 되돌림
+    }
+  };
 
   // 집사 관리 상태
   const [members, setMembers] = useState<User[]>([]);
@@ -282,6 +300,22 @@ export default function SettingsScreen() {
               <Button label="재생성" variant="secondary" onPress={handleRegenerateToken} style={{ flex: 1 }} />
             </View>
           </Card>
+        </>)}
+
+        {/* 알림 — 웹은 예약 알림을 지원하지 않아 노출하지 않음 */}
+        {Platform.OS !== 'web' && settingSection('알림', <>
+          <View style={[styles.settingRow, shadow.sm]}>
+            <View style={styles.rowInfo}>
+              <Text style={styles.rowLabel}>오늘의 루틴 알림</Text>
+              <Text style={styles.rowValue}>매일 {DAILY_REMINDER_HOURS.join(', ')}시</Text>
+            </View>
+            <Switch
+              testID="settings-daily-reminder-toggle"
+              value={remindersEnabled}
+              onValueChange={handleToggleReminders}
+              trackColor={{ true: colors.caramel }}
+            />
+          </View>
         </>)}
 
         {/* 이름 편집 모달 */}

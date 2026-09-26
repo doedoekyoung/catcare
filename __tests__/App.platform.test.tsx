@@ -6,7 +6,12 @@
  * 한계: 실제 네이티브 모듈 통합·gradle 빌드는 검증하지 않음 — EAS 빌드 + 디바이스 검증과 함께 사용.
  */
 
-import { Platform } from 'react-native';
+// ⚠️ 최상단에서 `import { Platform } from 'react-native'`를 하지 않는다. 아래 테스트에서
+// resetModules() 이후 그 참조를 뮤테이트하면, 이 파일 자체는 이전 "세대"의 react-native를
+//붙든 채라 뮤테이션이 새로 require되는 App(과 그 내부 트리)에 반영되지 않는다 — 즉
+// android/web 케이스가 실제로는 항상 기본값(ios)으로 실행되어 왔다(2026-09 확인).
+// 반드시 resetModules() 다음에 require('react-native')로 "같은 세대"의 Platform을 얻어
+// 그것을 뮤테이트해야 이후 require('../App')이 보는 것과 동일한 인스턴스가 된다.
 
 // Supabase 클라이언트는 테스트 환경에서 실제 연결을 만들지 않도록 모킹
 jest.mock('../src/services/supabase', () => ({
@@ -86,8 +91,10 @@ const PLATFORMS: Array<'ios' | 'android' | 'web'> = ['ios', 'android', 'web'];
 describe('App startup smoke test (마운트 시 throw 없음)', () => {
   PLATFORMS.forEach((os) => {
     test(`${os}에서 App이 마운트 단계까지 throw하지 않음`, () => {
-      (Platform as any).OS = os;
+      // resetModules 먼저 → 이 세대의 react-native를 require해 뮤테이트 → 이후 같은 세대에서
+      // require되는 App(및 그 내부 트리)이 전부 이 Platform.OS를 보게 된다.
       jest.resetModules();
+      (require('react-native').Platform as any).OS = os;
       // require 시점에 모듈 평가, render 시점에 컴포넌트 함수 본문 실행 — 둘 다 검증
       const TestRenderer = require('react-test-renderer');
       const App = require('../App').default;

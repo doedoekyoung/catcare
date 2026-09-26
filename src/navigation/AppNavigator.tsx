@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { View, Platform } from 'react-native';
+import { View, Platform, AppState } from 'react-native';
 
 import Logo from '../components/Logo';
 import AuthScreen from '../screens/AuthScreen';
@@ -16,11 +16,14 @@ import ShareScreen from '../screens/ShareScreen';
 
 import { subscribeToAuthState } from '../services/authService';
 import {
+  areDailyRemindersEnabled, scheduleDailyReminders, cancelDailyReminders, setBadgeCount,
+} from '../services/notificationService';
+import {
   subscribeToCats, subscribeToRecipes,
   subscribeToChecks, subscribeToLogs,
   getHouseholdById,
 } from '../services/dbService';
-import { useStore } from '../store/useStore';
+import { useStore, selectCompletionRate } from '../store/useStore';
 import { colors, spacing, radius } from '../utils/theme';
 import { toDateKey } from '../utils/date';
 
@@ -100,11 +103,17 @@ export default function AppNavigator() {
       if (!u) {
         setUser(null);
         setAuthLoaded(true);
+        cancelDailyReminders().catch(() => {});
+        setBadgeCount(0).catch(() => {});
         return;
       }
 
       setUser(u);
       setAuthLoaded(true);
+      // fire-and-forget — 알림 예약 실패가 로그인 흐름을 막지 않도록 await하지 않는다.
+      areDailyRemindersEnabled()
+        .then((on) => { if (on) return scheduleDailyReminders(); })
+        .catch(() => {});
 
       if (u?.householdId) {
         setIsLoading(true);
@@ -138,6 +147,29 @@ export default function AppNavigator() {
       }
     };
   }, []);
+
+  // 배지(오늘 남은 할 일 수) 동기화 — 가구 전체 기준, 홈 화면의 고양이 탭 필터와는 무관.
+  // 체크 토글 등으로 store가 바뀔 때, 그리고 앱이 포그라운드로 돌아올 때(자정 넘어 날짜가
+  // 바뀐 채 백그라운드에 있었던 경우 등) 다시 계산한다. 완전히 종료된 채로 예약 알림만
+  // 울리는 동안에는 갱신되지 않고, 다음에 앱을 열 때 그 시점 기준 값으로 보정된다.
+  useEffect(() => {
+    if (shareToken || Platform.OS === 'web') return;
+    const syncBadge = () => {
+      const { cats, recipes, checks } = useStore.getState();
+      const catIds = cats.map((c) => c.id);
+      const { done, total } = selectCompletionRate(recipes, checks, toDateKey(), catIds);
+      setBadgeCount(total - done).catch(() => {});
+    };
+    syncBadge();
+    const unsubStore = useStore.subscribe(syncBadge);
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncBadge();
+    });
+    return () => {
+      unsubStore();
+      appStateSub.remove();
+    };
+  }, [shareToken]);
 
   if (shareToken) {
     return (

@@ -12,6 +12,8 @@ import { requestPermissions } from './src/services/notificationService';
 export default function App() {
   useEffect(() => {
     requestPermissions();
+    // 배지(오늘 남은 할 일 수) 동기화는 AppNavigator에서 담당 — household 데이터가
+    // 거기서만 구독되기 때문. 여기선 알림 권한 요청만.
   }, []);
 
   const inner = (
