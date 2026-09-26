@@ -206,12 +206,15 @@ describe('배지(오늘 남은 할 일 수)', () => {
     });
   });
 
-  describe('Android — 조용한 지속 알림으로 setNumber 반영 (ShortcutBadger는 One UI 6.1+에서 무시됨)', () => {
-    test('남은 게 있으면 채널을 만들고 고정 identifier로 알림을 예약(=교체)', async () => {
+  describe('Android — 지속 알림(setNumber) + 레거시 setBadgeCountAsync 병행', () => {
+    // 레거시 경로(ShortcutBadger, 삼성 자체 배지 DB)는 런처 소유라서 우리가 갱신을
+    // 멈추면 마지막 성공값이 영구히 남는다(실기기에서 재현: 알림엔 최신 값이 뜨는데
+    // 아이콘은 예전 빌드의 값에 박제됨). 그래서 알림 기반 방식과 함께 계속 호출한다.
+    test('남은 게 있으면 채널을 만들고 고정 identifier로 알림을 예약(=교체) + 레거시 경로도 함께 호출', async () => {
       mockCurrentOS = 'android';
       await svc.setBadgeCount(3);
 
-      expect(mockSetBadgeCountAsync).not.toHaveBeenCalled(); // 안드로이드는 이 경로를 안 씀
+      expect(mockSetBadgeCountAsync).toHaveBeenCalledWith(3); // 레거시 경로도 계속 갱신
       expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
         'daily-status',
         expect.objectContaining({ importance: 2 })
@@ -227,24 +230,38 @@ describe('배지(오늘 남은 할 일 수)', () => {
       expect(req.trigger).toEqual({ seconds: 1, channelId: 'daily-status' });
     });
 
-    test('0이면 새로 예약하지 않고 기존 알림을 지움', async () => {
+    test('0이면 새로 예약하지 않고 기존 알림을 지움 + 레거시 경로도 0으로 갱신', async () => {
       mockCurrentOS = 'android';
       await svc.setBadgeCount(0);
 
       expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
       expect(mockDismissNotificationAsync).toHaveBeenCalledWith('daily-status-badge');
+      expect(mockSetBadgeCountAsync).toHaveBeenCalledWith(0);
     });
 
     test('음수도 0 취급 — 알림을 지움', async () => {
       mockCurrentOS = 'android';
       await svc.setBadgeCount(-1);
       expect(mockDismissNotificationAsync).toHaveBeenCalledWith('daily-status-badge');
+      expect(mockSetBadgeCountAsync).toHaveBeenCalledWith(0);
     });
 
-    test('예약 실패해도 던지지 않음', async () => {
+    test('예약 실패해도 던지지 않음(레거시 경로는 이미 시도된 상태)', async () => {
       mockCurrentOS = 'android';
       mockScheduleNotificationAsync.mockImplementationOnce(() => Promise.reject(new Error('fail')));
       await expect(svc.setBadgeCount(2)).resolves.toBeUndefined();
+      expect(mockSetBadgeCountAsync).toHaveBeenCalledWith(2);
+    });
+
+    test('레거시 setBadgeCountAsync가 실패해도 알림 예약은 정상 진행', async () => {
+      mockCurrentOS = 'android';
+      mockSetBadgeCountAsync.mockImplementationOnce(() => Promise.reject(new Error('legacy fail')));
+      await svc.setBadgeCount(4);
+
+      expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(1);
+      const info = await svc.getBadgeDebugInfo();
+      expect(info).toMatchObject({ outcome: 'success' }); // 레거시 실패는 부가 정보일 뿐 전체를 실패로 안 만듦
+      expect(info.detail).toContain('레거시 setBadgeCountAsync(4): 실패');
     });
   });
 });

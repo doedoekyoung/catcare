@@ -199,13 +199,24 @@ async function _setBadgeCountImpl(remaining: number): Promise<void> {
     return;
   }
 
-  // Android — 0이면 지속 알림을 지워서 배지도 함께 사라지게 함
+  // Android
+  // 레거시 경로(ShortcutBadger, 삼성 자체 배지 DB) — 오늘 초반 빌드(24246d2)는 안드로이드
+  // 에서도 setBadgeCountAsync를 직접 호출했었다. 그 DB는 우리 앱이 아니라 런처(홈) 앱
+  // 소유라서, 그 이후 알림 기반 방식으로 바꾸며 이 호출을 멈추자 "마지막으로 성공했던
+  // 값"이 영구히 남아버렸다(실기기 확인: 알림엔 최신 값이 정확히 뜨는데 아이콘은 예전
+  // 값에 그대로 박제됨 — 앱 캐시 삭제·재설치로도 안 지워짐, 런처 소유 DB라 당연함).
+  // 그래서 알림 기반 방식과 별개로 이 경로도 계속 best-effort로 갱신해 오래된 값이
+  // 남지 않게 한다. 어느 쪽을 실제로 읽는 런처든 항상 최신 값을 보게 하려는 것.
+  const legacyOk = await Notifications.setBadgeCountAsync(n).catch(() => false);
+  const legacyNote = `레거시 setBadgeCountAsync(${n}): ${legacyOk ? '성공' : '실패'}`;
+
+  // 0이면 지속 알림을 지워서 배지도 함께 사라지게 함
   if (n === 0) {
     try {
       await Notifications.dismissNotificationAsync(STATUS_NOTIFICATION_ID);
-      await recordDebug({ ...base, permission, outcome: 'success', detail: '남은 일 0개 — 상태 알림 제거' });
+      await recordDebug({ ...base, permission, outcome: 'success', detail: `남은 일 0개 — 상태 알림 제거 (${legacyNote})` });
     } catch (e: any) {
-      await recordDebug({ ...base, permission, outcome: 'error', detail: e?.message ?? String(e) });
+      await recordDebug({ ...base, permission, outcome: 'error', detail: `${e?.message ?? String(e)} (${legacyNote})` });
     }
     return;
   }
@@ -228,9 +239,9 @@ async function _setBadgeCountImpl(remaining: number): Promise<void> {
       // 이걸로 채널을 지정 — 1초 뒤 실행되어 사실상 즉시 표시.
       trigger: { seconds: 1, channelId: STATUS_CHANNEL_ID },
     });
-    await recordDebug({ ...base, permission, outcome: 'success', detail: `알림 예약됨 (id=${id})` });
+    await recordDebug({ ...base, permission, outcome: 'success', detail: `알림 예약됨 (id=${id}) / ${legacyNote}` });
   } catch (e: any) {
-    await recordDebug({ ...base, permission, outcome: 'error', detail: e?.message ?? String(e) });
+    await recordDebug({ ...base, permission, outcome: 'error', detail: `${e?.message ?? String(e)} (${legacyNote})` });
   }
 }
 
