@@ -153,7 +153,22 @@ export async function getBadgeDebugInfo(): Promise<BadgeDebugInfo | null> {
   }
 }
 
-export async function setBadgeCount(remaining: number): Promise<void> {
+// 체크 토글처럼 store가 짧은 시간에 연속으로 바뀌면 AppNavigator가 setBadgeCount를
+// 겹쳐서 여러 번 부른다. 각 호출은 채널 생성/알림 예약처럼 여러 단계의 비동기 네이티브
+// 작업이라, await 없이 그냥 fire-and-forget으로 두면 나중에 시작된 호출(최신 값)의
+// 네이티브 작업이 먼저 끝난 호출(오래된 값)보다 먼저 끝나버릴 수 있다 — 그러면 알림
+// 본문(마지막에 쓴 텍스트)과 배지 숫자(실제로 마지막에 반영된 값)가 서로 다른 시점의
+// 값으로 어긋난다("완료 → 완료 해제"처럼 store가 빠르게 두 번 바뀔 때 실제로 재현됨).
+// 그래서 호출을 큐에 넣어 항상 호출된 순서대로 하나씩만 실행되게 한다.
+let _badgeQueue: Promise<void> = Promise.resolve();
+
+export function setBadgeCount(remaining: number): Promise<void> {
+  const run = _badgeQueue.then(() => _setBadgeCountImpl(remaining));
+  _badgeQueue = run.catch(() => undefined); // 이번 호출이 실패해도 다음 호출까지 막지 않음
+  return run;
+}
+
+async function _setBadgeCountImpl(remaining: number): Promise<void> {
   const n = Math.max(0, remaining);
   const base = {
     timestamp: new Date().toISOString(),

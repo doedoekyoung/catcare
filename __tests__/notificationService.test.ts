@@ -248,3 +248,36 @@ describe('배지(오늘 남은 할 일 수)', () => {
     });
   });
 });
+
+// 실기기에서 재현된 버그: 체크 → 체크 해제처럼 store가 짧은 시간에 두 번 바뀌면
+// setBadgeCount가 겹쳐서 두 번 호출된다. 나중 호출(최신 값)의 네이티브 작업이
+// 먼저 호출(오래된 값)보다 먼저 끝나버리면, 최종 알림에는 오래된 값이 남는다.
+describe('겹쳐서 호출될 때 순서 보장 — 나중 호출이 항상 마지막에 반영됨', () => {
+  test('먼저 호출된 것의 네이티브 작업이 더 오래 걸려도, 최종 값은 나중 호출(최신) 것', async () => {
+    mockCurrentOS = 'android';
+    let resolveFirst!: (id: string) => void;
+    mockScheduleNotificationAsync
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; })) // 3(오래된 값) — 아직 안 끝남
+      .mockImplementationOnce(() => Promise.resolve('id-2')); // 5(최신 값) — 바로 끝남
+
+    const p1 = svc.setBadgeCount(3); // 체크 해제 전(오래된 값) — await 안 하고 겹쳐서 호출
+    const p2 = svc.setBadgeCount(5); // 체크 해제 후(최신 값)
+
+    // 큐가 직렬화한다면 p2의 네이티브 호출(n=5)은 p1(n=3)의 scheduleNotificationAsync가
+    // "완전히 끝나기 전"엔 시작될 수 없다 — resolveFirst 전에는 호출이 1번뿐이어야 함.
+    await Promise.resolve().then(() => Promise.resolve()).then(() => Promise.resolve());
+    expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    expect((mockScheduleNotificationAsync.mock.calls[0] as any)[0].content.badge).toBe(3);
+
+    resolveFirst('id-1'); // 이제 오래된 호출(3)이 끝남 → 큐가 다음(5)으로 진행
+    await p1;
+    await p2;
+
+    expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(2);
+    // 호출 순서 자체가 뒤바뀌지 않아야 함(오래된 값이 먼저, 최신 값이 나중)
+    expect((mockScheduleNotificationAsync.mock.calls[1] as any)[0].content.badge).toBe(5);
+    // 최종적으로 기록/반영된 값은 나중 호출(최신, 5)이어야 함
+    const info = await svc.getBadgeDebugInfo();
+    expect(info).toMatchObject({ remaining: 5, outcome: 'success' });
+  });
+});
