@@ -75,6 +75,22 @@ export const typography = {
   label: { fontSize: 12, fontWeight: '400' as const },
 } as const;
 
+// 태그 색상 + 알파(hex, 예: 0x18)를 흰 배경 위에 미리 섞어 "불투명" hex로 반환.
+// 안드로이드에서 elevation(그림자)이 걸린 View에 진짜 반투명 배경(color+alpha 문자열)을
+// 쓰면 그림자 합성이 깨져 밝은 사각형이 떠 보이는 렌더링 버그가 있다 — 실기기에서 확인.
+// shadow.sm/md와 함께 쓰는 View의 "옅은 색조" 배경엔 항상 이 함수로 미리 섞은 불투명
+// 색을 써야 한다(RoutineChecklist의 완료 상태 배경에서 최초 발견).
+export function tintOnWhite(hexColor: string, alpha: number, base: string = '#FFFFFF'): string {
+  const c = hexColor.replace('#', '');
+  const b = base.replace('#', '');
+  const cr = parseInt(c.slice(0, 2), 16), cg = parseInt(c.slice(2, 4), 16), cb = parseInt(c.slice(4, 6), 16);
+  const br = parseInt(b.slice(0, 2), 16), bg = parseInt(b.slice(2, 4), 16), bb = parseInt(b.slice(4, 6), 16);
+  const a = alpha / 255;
+  const mix = (fg: number, bgc: number) => Math.round(fg * a + bgc * (1 - a));
+  const toHex = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${toHex(mix(cr, br))}${toHex(mix(cg, bg))}${toHex(mix(cb, bb))}`;
+}
+
 export const shadow = StyleSheet.create({
   sm: {
     shadowColor: colors.shadowColor,

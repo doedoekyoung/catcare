@@ -1,9 +1,9 @@
 // src/components/RoutineChecklist.tsx
 // 시간대별 루틴 체크리스트 — HomeScreen(오늘)과 RecordsScreen(과거 날짜 수정)이 공유.
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { SectionTitle } from './ui';
-import { colors, spacing, radius, shadow } from '../utils/theme';
+import { colors, spacing, radius, shadow, tintOnWhite } from '../utils/theme';
 import { selectActiveRecipesForCats } from '../store/useStore';
 import type { Cat, Recipe, CheckRecord, TimeSlot } from '../types';
 
@@ -76,10 +76,17 @@ export function RoutineChecklist({
                   style={[
                     styles.checkItem,
                     isDone
-                      ? { backgroundColor: tagColor + '18', borderColor: tagColor + '60' }
+                      // 반투명 배경(tagColor+alpha)을 elevation(안드로이드 그림자)과 같이 쓰면
+                      // 그림자 합성이 깨져서 체크 직후 텍스트 영역이 밝게 들뜨는 렌더링 버그가
+                      // 있음(실기기 확인). 완료 상태만 불투명 색으로 미리 섞어서 회피.
+                      ? { backgroundColor: tintOnWhite(tagColor, 0x18), borderColor: tagColor + '60' }
                       : { backgroundColor: '#fff', borderColor: tagColor + '50' },
                     { borderLeftWidth: 3, borderLeftColor: tagColor },
                     isChanged && styles.checkItemChanged,
+                    // 웹: 클릭 후 activeOpacity가 풀리는 순간 브라우저 기본 포커스 표시가
+                    // 텍스트 영역 쪽에 밝게 드러나 보여 어색했음(체크 직후에만 눈에 띔).
+                    // CatsScreen의 select와 같은 방식으로 제거.
+                    Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
                   ]}
                   onPress={() => onToggle(recipe, catId, t)}
                   activeOpacity={0.7}
