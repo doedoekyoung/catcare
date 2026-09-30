@@ -118,41 +118,6 @@ async function ensureStatusChannel(): Promise<void> {
   });
 }
 
-// ── 진단 정보 ──────────────────────────────────────────────────────────────────
-// setBadgeCount의 모든 시도(성공/실패)를 기록해 관리 탭에서 바로 볼 수 있게 한다.
-// 배지가 안 뜨는 문제는 코드가 조용히 실패해도 증상이 "그냥 안 보인다"뿐이라
-// 원인 파악이 안 됐던 것 — 실패를 삼키지 않고 남겨서 실기기에서 바로 확인 가능하게 함.
-export interface BadgeDebugInfo {
-  timestamp: string;   // ISO
-  platform: string;    // 'ios' | 'android' | 'web'
-  osVersion: string | number;
-  permission: string;  // granted | denied | undetermined | unknown
-  remaining: number;   // 이번에 계산된 남은 할 일 수
-  outcome: 'success' | 'error' | 'skipped-web';
-  detail: string;      // 성공 시 알림 id 등, 실패 시 에러 메시지
-}
-
-const DEBUG_STORAGE_KEY = '_cc_badge_debug';
-let _lastDebug: BadgeDebugInfo | null = null;
-
-async function recordDebug(info: BadgeDebugInfo): Promise<void> {
-  _lastDebug = info;
-  try {
-    await AsyncStorage.setItem(DEBUG_STORAGE_KEY, JSON.stringify(info));
-  } catch {}
-}
-
-// 메모리에 있으면 그걸(가장 최신), 없으면(예: 앱 재시작 직후) 저장된 마지막 값을 읽는다.
-export async function getBadgeDebugInfo(): Promise<BadgeDebugInfo | null> {
-  if (_lastDebug) return _lastDebug;
-  try {
-    const raw = await AsyncStorage.getItem(DEBUG_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as BadgeDebugInfo) : null;
-  } catch {
-    return null;
-  }
-}
-
 // 체크 토글처럼 store가 짧은 시간에 연속으로 바뀌면 AppNavigator가 setBadgeCount를
 // 겹쳐서 여러 번 부른다. 각 호출은 채널 생성/알림 예약처럼 여러 단계의 비동기 네이티브
 // 작업이라, await 없이 그냥 fire-and-forget으로 두면 나중에 시작된 호출(최신 값)의
@@ -169,33 +134,13 @@ export function setBadgeCount(remaining: number): Promise<void> {
 }
 
 async function _setBadgeCountImpl(remaining: number): Promise<void> {
+  if (Platform.OS === 'web') return;
   const n = Math.max(0, remaining);
-  const base = {
-    timestamp: new Date().toISOString(),
-    platform: Platform.OS,
-    osVersion: Platform.Version,
-    remaining: n,
-  };
-
-  if (Platform.OS === 'web') {
-    await recordDebug({ ...base, permission: 'n/a', outcome: 'skipped-web', detail: '웹은 배지/예약 알림 미지원' });
-    return;
-  }
-
-  const perm = await Notifications.getPermissionsAsync().catch(() => null);
-  const permission = perm?.status ?? 'unknown';
 
   if (Platform.OS === 'ios') {
     try {
-      const ok = await Notifications.setBadgeCountAsync(n);
-      await recordDebug({
-        ...base, permission,
-        outcome: ok ? 'success' : 'error',
-        detail: ok ? `setBadgeCountAsync(${n}) 성공` : 'setBadgeCountAsync가 false 반환(권한 없음 등)',
-      });
-    } catch (e: any) {
-      await recordDebug({ ...base, permission, outcome: 'error', detail: e?.message ?? String(e) });
-    }
+      await Notifications.setBadgeCountAsync(n);
+    } catch {}
     return;
   }
 
@@ -207,22 +152,18 @@ async function _setBadgeCountImpl(remaining: number): Promise<void> {
   // 값에 그대로 박제됨 — 앱 캐시 삭제·재설치로도 안 지워짐, 런처 소유 DB라 당연함).
   // 그래서 알림 기반 방식과 별개로 이 경로도 계속 best-effort로 갱신해 오래된 값이
   // 남지 않게 한다. 어느 쪽을 실제로 읽는 런처든 항상 최신 값을 보게 하려는 것.
-  const legacyOk = await Notifications.setBadgeCountAsync(n).catch(() => false);
-  const legacyNote = `레거시 setBadgeCountAsync(${n}): ${legacyOk ? '성공' : '실패'}`;
+  try { await Notifications.setBadgeCountAsync(n); } catch {}
 
   // 0이면 지속 알림을 지워서 배지도 함께 사라지게 함
   if (n === 0) {
     try {
       await Notifications.dismissNotificationAsync(STATUS_NOTIFICATION_ID);
-      await recordDebug({ ...base, permission, outcome: 'success', detail: `남은 일 0개 — 상태 알림 제거 (${legacyNote})` });
-    } catch (e: any) {
-      await recordDebug({ ...base, permission, outcome: 'error', detail: `${e?.message ?? String(e)} (${legacyNote})` });
-    }
+    } catch {}
     return;
   }
   try {
     await ensureStatusChannel();
-    const id = await Notifications.scheduleNotificationAsync({
+    await Notifications.scheduleNotificationAsync({
       identifier: STATUS_NOTIFICATION_ID, // 같은 id로 다시 예약 → 쌓이지 않고 교체됨
       content: {
         title: '오늘 할 일이 남아있어요',
@@ -234,15 +175,12 @@ async function _setBadgeCountImpl(remaining: number): Promise<void> {
       },
       // { channelId }만 있는 트리거는 네이티브에서 ChannelAwareTrigger로 변환되는데,
       // 이건 SchedulableNotificationTrigger가 아니라서 "does not have a schedulable
-      // trigger. Refusing to schedule." 예외가 난다(실기기 진단 정보로 확인함).
+      // trigger. Refusing to schedule." 예외가 난다(실기기 확인).
       // seconds 트리거(TimeIntervalTrigger)는 SchedulableNotificationTrigger를 구현하므로
       // 이걸로 채널을 지정 — 1초 뒤 실행되어 사실상 즉시 표시.
       trigger: { seconds: 1, channelId: STATUS_CHANNEL_ID },
     });
-    await recordDebug({ ...base, permission, outcome: 'success', detail: `알림 예약됨 (id=${id}) / ${legacyNote}` });
-  } catch (e: any) {
-    await recordDebug({ ...base, permission, outcome: 'error', detail: `${e?.message ?? String(e)} (${legacyNote})` });
-  }
+  } catch {}
 }
 
 export async function sendImmediateNotification(
