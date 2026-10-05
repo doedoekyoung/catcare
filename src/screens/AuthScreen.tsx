@@ -81,7 +81,9 @@ export default function AuthScreen() {
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.logoWrap}>
-            <Logo height={64} withTagline />
+            {/* 스플래시 화면(splash.png, contain)에서 워드마크가 화면폭의 약 84%를 차지하는
+                것과 동일한 비율이 되도록 AppNavigator 로딩화면과 같은 56으로 통일. */}
+            <Logo height={56} withTagline />
           </View>
 
           <View style={styles.tabs}>
